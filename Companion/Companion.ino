@@ -1,7 +1,7 @@
 //**********************************************************************************************************
 // COMPANION pour MaxPV!                                                                                  **/
 //
-String Version = "0.10";
+String Version = "1.0";
 //                                                                                                        **
 /***********************************************************************************************************
 ** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie **
@@ -51,10 +51,12 @@ String Version = "0.10";
 #define ECRAN_PRINCIPAL         1
 #define ECRAN_INDEX_JOURNALIERS 2
 #define ECRAN_METEO             3 // Déclaré, mais non géré
-#define ECRAN_RESERVE_ENERGIE   4 // Déclaré, mais non géré
+#define ECRAN_RESERVE_ENERGIE   4
 int ecranCourant = -1;            // Identifie l'écran à afficher
 #define REGLE_MEME_ECRAN        0
 #define REGLE_ECRAN_SUIVANT     1
+#define REGLE_ECRAN_PRINCIPAL   2
+
 
 TFT_eSPI lcd = TFT_eSPI();
 TFT_eSprite sprite     = TFT_eSprite(&lcd);  // Tout l'écran
@@ -72,6 +74,7 @@ TFT_eSprite luminosite = TFT_eSprite(&lcd);  // Sprite réglage luminosité
 // Couleur Température cumulus
 #define color8 0x16DA  // Bleu clair
 
+// Rayon d'arrondi des rectangles
 #define RECT_RADIUS 4
 
 
@@ -185,7 +188,7 @@ void setup() {
   depart.createSprite(320, 170);
   depart.setSwapBytes(true);
   depart.pushImage(20, 15, 280, 120, splashscreen);
-  depart.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  depart.setTextColor(TFT_LIGHTGREY);
   depart.setTextDatum(MC_DATUM);
   depart.drawString("Version " + (Version), 160, 150, 2);
   depart.pushSprite(0, 0, TFT_BLACK);
@@ -205,14 +208,13 @@ void setup() {
   WiFi.disconnect(true);
   delay(1000);
 
-  depart.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  depart.setTextColor(TFT_LIGHTGREY);
   depart.setTextDatum(MC_DATUM);
   depart.drawString("Connexion sur " + String(ssid) + " en cours", 160, 150, 2);
   depart.pushSprite(0, 0);
 
   // Creation des sprites affichage
   sprite.createSprite(320, 170);  // Tout l'ecran
-  //sprite.setTextColor(TFT_WHITE,TFT_BLACK);   // Ecriture blanc sur fond noir
   sprite.setTextDatum(MC_DATUM);  // Alignement texte au centre du rectangle le contenant
   voyant.createSprite(64, 64);    // Voyant rouge, vert ou bleu indiquant si on peut lancer un truc
   voyant.setSwapBytes(true);      // (Pour affichage correct d'une image)
@@ -257,7 +259,7 @@ void setup() {
       depart.drawString("Connexion sur " + String(ssid) + " en cours (" + (lastTime + (WDT_TIMEOUT - 1) * 1000 - millis()) / 1000 + "s)", 160, 150, 2);
     }
 
-    depart.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    depart.setTextColor(TFT_LIGHTGREY, TFT_BLACK); // Conserver la couleur de fond pour éviter un mauvais affichage pour les "...."
     depart.drawString(waitingTxt, 160, 163, 2);
     depart.pushSprite(0, 0);
     delay(100);
@@ -277,7 +279,7 @@ void setup() {
   esp_task_wdt_reset();
 
   // Affichage texte sur écran de départ
-  depart.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  depart.setTextColor(TFT_LIGHTGREY);
   depart.setTextDatum(MC_DATUM);
   // Pour réinitialiser la zone de texte "Connexion...."
   depart.fillRoundRect(0, 143, 320, 15, 0, TFT_BLACK);
@@ -302,8 +304,9 @@ void setup() {
 
   // Activation du simple et double clic sur les 2 boutons
   buttonGauche.attachClick(handleClickGauche);
-  buttonGauche.attachDoubleClick(doubleClickGauche);
+  buttonGauche.attachDoubleClick(handleDoubleClickGauche);
   buttonDroit.attachClick(handleClickDroit);
+  buttonDroit.attachDoubleClick(handleDoubleClickDroit);
   
   // Activation du mDNS responder: encore idée de Bellule
   // il suffit de taper dans l'invite du navigateur web
@@ -344,7 +347,7 @@ void loop() {
     lastDownloadUpdate = millis();
   }
 
-  // Rafraichissement des données
+  // Rafraichissement des données émises par MaxPV
   if (awaitingArrivals) {
     if (!arrivalsRequested) {
       arrivalsRequested = true;
@@ -374,7 +377,7 @@ void loop() {
   buttonGauche.tick();
   buttonDroit.tick();
 
-// Teste si demande lecture serveur web
+  // Teste si demande lecture serveur web
   serveurweb();
 
   booted = false;
@@ -426,7 +429,7 @@ void AfficheEcranPrincipal() {
   //  Dessin fenêtre principale
   sprite.fillSprite(TFT_BLACK);
   sprite.setTextDatum(MC_DATUM);
-  sprite.setTextColor(TFT_WHITE, TFT_BLACK);
+  sprite.setTextColor(TFT_WHITE);
 
   // Panneaux principaux
   sprite.drawRoundRect(0, 0, 226, 55, RECT_RADIUS, TFT_LIGHTGREY);
@@ -438,8 +441,7 @@ void AfficheEcranPrincipal() {
   else sprite.drawString(" EXPORTATION RESEAU ", 115, 126, 2);
 
   // Panneau de droite sur l'écran : heure, date, batterie
-  sprite.drawRoundRect(234,  0, 86, 31, RECT_RADIUS, TFT_LIGHTGREY);
-  sprite.drawRoundRect(234, 33, 86, 20, RECT_RADIUS, TFT_LIGHTGREY);
+  sprite.drawRoundRect(234,  0, 86, 54, RECT_RADIUS, TFT_LIGHTGREY);
 
   if (lipo) {
 
@@ -482,10 +484,10 @@ void AfficheEcranPrincipal() {
 
   // Affichage Météo
   meteo.pushImage(0,0,50,50,unknown);
-  if (icone == "01d")                       {meteo.pushImage(0,0,50,50,clear_day);            goto suite;}
-  if (icone == "01n")                       {meteo.pushImage(0,0,50,50,clear_night);          goto suite;}
-  if (icone == "02d")                       {meteo.pushImage(0,0,50,50,partly_cloudy_day);    goto suite;}
-  if (icone == "02n")                       {meteo.pushImage(0,0,50,50,partly_cloudy_night);  goto suite;}
+  if  (icone == "01d")                      {meteo.pushImage(0,0,50,50,clear_day);            goto suite;}
+  if  (icone == "01n")                      {meteo.pushImage(0,0,50,50,clear_night);          goto suite;}
+  if  (icone == "02d")                      {meteo.pushImage(0,0,50,50,partly_cloudy_day);    goto suite;}
+  if  (icone == "02n")                      {meteo.pushImage(0,0,50,50,partly_cloudy_night);  goto suite;}
   if ((icone == "03d") or (icone == "03n")) {meteo.pushImage(0,0,50,50,few_clouds);           goto suite;}
   if ((icone == "04d") or (icone == "04n")) {meteo.pushImage(0,0,50,50,cloudy);               goto suite;}
   if ((icone == "09d") or (icone == "09n")) {meteo.pushImage(0,0,50,50,rain);                 goto suite;}
@@ -493,25 +495,25 @@ void AfficheEcranPrincipal() {
   if ((icone == "11d") or (icone == "11n")) {meteo.pushImage(0,0,50,50,thunderstorm);         goto suite;}
   if ((icone == "13d") or (icone == "13n")) {meteo.pushImage(0,0,50,50,snow);                 goto suite;}
   if ((icone == "50d") or (icone == "50n")) {meteo.pushImage(0,0,50,50,fog);                  goto suite;}
-  if (icone == "80d")                       {meteo.pushImage(0,0,50,50,splash);               goto suite;}
-  if (ID == "301")                          {meteo.pushImage(0,0,50,50,drizzle);              goto suite;} 
-  if (ID == "221")                           meteo.pushImage(0,0,50,50,wind);
+  if  (icone == "80d")                      {meteo.pushImage(0,0,50,50,splash);               goto suite;}
+  if  (ID == "301")                         {meteo.pushImage(0,0,50,50,drizzle);              goto suite;} 
+  if  (ID == "221")                          meteo.pushImage(0,0,50,50,wind);
 
 suite:
   // Affiche icone metéo et température extérieure
   // Affichage température et du ° de la température
   sprite.setTextDatum(MR_DATUM);  // centre droit
-  sprite.drawString(tempExt, 256, 160, 2);
-  sprite.drawCircle(260, 156, 2, TFT_WHITE);  // cercle pour le caractère "°" qui n'est pas dans la police de caractères
+  sprite.drawString(tempExt, 256, 140, 2);
+  sprite.drawCircle(260, 136, 2, TFT_WHITE);  // cercle pour le caractère "°" qui n'est pas dans la police de caractères
   // Affichage du taux d'humidité
-  sprite.drawString(humExt, 256, 140, 2);
+  sprite.drawString(humExt, 256, 160, 2);
   sprite.setTextDatum(ML_DATUM);  // centre droit
-  sprite.drawString("%", 258, 140, 2); // Position centre cercle 260 - rayon 2
+  sprite.drawString("%", 258, 160, 2); // Position centre cercle 260 - rayon 2
   
   sprite.setTextDatum(MC_DATUM);              // centre milieu
   // Affiche "*" pour indiquer le risque de gel
   if (tempExt.toInt() <= 3) {
-    sprite.setTextColor(TFT_CYAN, TFT_BLACK);
+    sprite.setTextColor(TFT_CYAN);
     sprite.drawString("*", 235, 168, 4);
   }
   
@@ -519,9 +521,9 @@ suite:
   meteo.pushToSprite(&sprite, 272, 122, TFT_TRANSPARENT); // Normalement devrait être 270,120 pour une image 50x50. Mais comme il y a un peu de bordure sauf pour "partly_cloudy_day", on ruse en décalant plus l'image
 
   // Affichage heure et date
-  sprite.setTextColor(TFT_WHITE, TFT_BLACK);
-  sprite.drawString(String(timeNow), 277, 17, 4);
-  sprite.drawString(String(dateNow), 277, 43, 2);
+  sprite.setTextColor(TFT_WHITE);
+  sprite.drawString(String(timeNow), 277, 19, 4);
+  sprite.drawString(String(dateNow), 277, 42, 2);
 
   // Puissance du signal WiFi
   AffichageSignalWifi();
@@ -534,13 +536,13 @@ suite:
 
     // Pour afficher le cercle de température coloré en fonction de la valeur de la température
     selectedColor = TFT_CYAN;
-    if (TEMPCU.toInt() >= 30) selectedColor = color8;  // Bleu clair
-    if (TEMPCU.toInt() >= 50) selectedColor = TFT_ORANGE;  // Orange
-    if (TEMPCU.toInt() >= 60) selectedColor = TFT_RED;  // Rouge
+    if (TEMPCU.toInt() >= 30) selectedColor = color8;     // Bleu clair
+    if (TEMPCU.toInt() >= 50) selectedColor = TFT_ORANGE; // Orange
+    if (TEMPCU.toInt() >= 60) selectedColor = TFT_RED;    // Rouge
 
     // Superposition d'un grand disque et d'un petit disque
-    sprite.fillSmoothCircle(25, 84, 22, selectedColor);      // Disque coloré
-    sprite.fillSmoothCircle(25, 84, 19, TFT_BLACK);  // Disque noir pour l'intérieur
+    sprite.fillSmoothCircle(25, 84, 22, selectedColor); // Disque coloré
+    sprite.fillSmoothCircle(25, 84, 19, TFT_BLACK);     // Disque noir pour l'intérieur
 
     // TODO : à améliorer en cas de format différent de xx.x
     sprite.setTextDatum(MC_DATUM);  // centre milieu
@@ -568,11 +570,11 @@ suite:
     }
   } else {
     // Pas de production, affichage heure lever et coucher du soleil
-    sprite.setTextColor(TFT_YELLOW, TFT_BLACK);
+    sprite.setTextColor(TFT_YELLOW);
     sprite.drawString(lever + " <-----> " + coucher, 113, 40, 4);
   }
 
-  sprite.setTextColor(TFT_WHITE, TFT_BLACK);
+  sprite.setTextColor(TFT_WHITE);
 
   // Affichage valeur routage ECS
   if (nbrentier) {
@@ -614,9 +616,7 @@ suite:
     // Affiche la valeur de la réserve d'énergie
     sprite.setTextDatum(MC_DATUM);
     sprite.setTextColor(TFT_BLACK);
-    char text[4];
-    dtostrf(wh_to_kwh(reserveEnergie),3,1,text); // Permet de renvoyer une chaine de 3 caractères max, avec 1 chiffre après la virgule
-    sprite.drawString(replacePointParVirgule(String(text)), 230+31, 60+28);
+    sprite.drawString(replacePointParVirgule(String(wh_to_kwh(reserveEnergie),1)), 230+31, 60+28); // ",1" permet de ne garder qu'une décimale pour les float
   }
 
   // En cas de chauffage électrique : affichage icone radiateur quand une grosse consommation est détectée
@@ -642,7 +642,7 @@ suite:
 /***************************************************************************************
 **                        Affichage de la page des cumuls
 ***************************************************************************************/
-void AfficheIndexJournaliers() {
+void AfficheEcranIndexJournaliers() {
 
   ecranCourant = ECRAN_INDEX_JOURNALIERS;
 
@@ -687,7 +687,7 @@ void AfficheIndexJournaliers() {
 
   // Affichage d'une ligne avec les infos Wifi
   //sprite.fillRoundRect(0,150,320,20,RECT_RADIUS,TFT_LIGHTGREY);
-  sprite.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  sprite.setTextColor(TFT_LIGHTGREY);
   sprite.drawString("http://companion (" + IP + ") " + RSSI + "dB v" + Version, 160, 160, 2);
 
   // Rafraichissement écran (indispensable après avoir tout dessiné)
@@ -716,7 +716,9 @@ void AfficheEcranReserveEnergie() {
   sprite.drawRoundRect(0, 32, 320, 138, RECT_RADIUS, TFT_LIGHTGREY);
 
   if (reserveEnergie >= 0) {
+    //
     // Cas : réserve d'énergie disponible
+    //
     // Le max de la réserve correspond à la production PV max possible => Pmax? ou puissancePV
 
     uint32_t selectedColor;
@@ -754,7 +756,8 @@ void AfficheEcranReserveEnergie() {
       // Création zone blanche (injection => CO négatif) sur la zone déjà tracée
       int width2 = abs(CO.toInt()) * echelle; // Largeur du rectancle en fonction de l'échelle
       sprite.fillRoundRect(2+width-width2, 34, width2, 134, RECT_RADIUS, TFT_WHITE);
-      sprite.fillRect(2+width-width2, 34, 2, 134, TFT_WHITE); // Juste pour ne pas avoir d'arrondi sur les bords gauche du rectangle
+      if (2+width-width2 > 3)
+        sprite.fillRect(2+width-width2, 34, 2, 134, TFT_WHITE); // Rectangle 2px avec angles droit sur la partie gauche pour ne pas avoir d'arrondi, sauf si c'est le début de la zone de traçage pour garder les arrondis
     }
 
     // Création des lignes verticales de l'échelle
@@ -784,7 +787,9 @@ void AfficheEcranReserveEnergie() {
 
   } else {
 
+    //
     // Cas : consommation réseau (reserveEnergie < 0)
+    //
     float echelle = 316.0 / puissanceCoupure; // Attention : puissanceCoupure est en kW
     int reserveEnergieSupCoup = 0; // Est utilisé dans le cas où la conso est supérieure à la puissance de coupure. On limite la taille de la zone colorée, mais on affiche la bonne valeur.
 
@@ -875,7 +880,7 @@ void decrypte() {
   // Exemple : Shelly 1P retourne une chaine du type : {"id": 100,"tC":21.9, "tF":71.5}
   if (baliseDebut.length() > 0 and baliseFin.length() > 0) {
     int startValue = dataTemperature.indexOf(baliseDebut);
-    int endValue = dataTemperature.indexOf(baliseFin);
+    int endValue   = dataTemperature.indexOf(baliseFin,startValue+1);
     TEMPCU = dataTemperature.substring(startValue + baliseDebut.length(), endValue);
   } else {
     TEMPCU = dataTemperature;  // Sonde température cumulus
@@ -889,7 +894,14 @@ void decrypte() {
   PV = MsgDataSplit[12];  // Production solaire instantanée PV - pimpulsion
   CU = MsgDataSplit[4];   // Routage vers la charge - prouted
 
+  // L'affichage de la température est limité à 1 décimale
+  int decimalValue = TEMPCU.indexOf("."); // Séparateur des décimales est un point
+  if (decimalValue < 0) decimalValue = TEMPCU.indexOf(","); // Séparateur des décimales est une virgule
+  if (decimalValue >= 0)
+    TEMPCU = TEMPCU.substring(0, decimalValue + 2); // Garder une seule décimale
+
   TEMPCU.replace('.', ',');  // Remplace le point par une virgule
+
   /*Serial.println("Compteurs instantanés : ");
   Serial.println(" - Conso : " + CO);
   Serial.println(" - Production PV : " + PV);
@@ -944,6 +956,7 @@ void decrypte() {
 
   esp_task_wdt_reset();
 }
+
 
 /***************************************************************************************
 **                      Affichage des bargraphs verticaux
@@ -1109,7 +1122,7 @@ void AfficheEclairage() {
   // Affichage en sur-impression au centre de l'écran, le réglage de la luminosité
   // Cet écran s'efface après une rafraichissement de l'écran (lors de la lecture des données)
   luminosite.setTextDatum(MC_DATUM);  // Alignement texte au centre du rectangle le contenant
-  luminosite.setTextColor(TFT_WHITE, TFT_DARKGREY);
+  luminosite.setTextColor(TFT_WHITE);
   luminosite.fillRoundRect(0, 0, 200, 90, RECT_RADIUS, TFT_DARKGREY);
   luminosite.drawString("Luminosite " + String(dim * 2 / 5) + "%", 100, 15, 2);            // Affichage du % de dim par rapport au max de 250 (=> 2/5)
   x = dim / 50;                                                                            // steps de 50
@@ -1195,17 +1208,35 @@ void donneesmeteo() {
   /******
   Serial.println("");
   Serial.println("#####  Données météo  #####");
-  Serial.print("Latitude       : "); Serial.println(ow.lat);
-  Serial.print("Longitude      : "); Serial.println(ow.lon);
-  Serial.print("Timezone       : "); Serial.println(forecast->timezone);
-  Serial.print("Heure actuelle : "); Serial.println(strTime(forecast->dt[0]));
-  Serial.print("Lever soleil   : "); Serial.println(strTime(forecast->sunrise));
-  Serial.print("Coucher soleil : "); Serial.println(strTime(forecast->sunset));
-  Serial.print("temperature    : "); Serial.println(forecast->temp[0]);
-  Serial.print("Humidité       : "); Serial.println(forecast->humidity[0]);
-  Serial.print("Description    : "); Serial.println(forecast->description[0]);
-  Serial.print("Icone          : "); Serial.println(forecast->icon[0]);
-  Serial.print("ID             : "); Serial.println(forecast->id[0]);
+  Serial.println("MAX_3HRS:"+String(MAX_3HRS) + " MAX_DAYS:"+String(MAX_DAYS));
+  
+  Serial.print("Latitude         : "); Serial.println(ow.lat);
+  Serial.print("Longitude        : "); Serial.println(ow.lon);
+  Serial.print("Timezone         : "); Serial.println(forecast->timezone);
+  Serial.print("City Name        : "); Serial.println(forecast->city_name);
+  Serial.print("Heure actuelle   : "); Serial.println(strTime(forecast->dt[0]));
+  Serial.print("Lever soleil     : "); Serial.println(strTime(forecast->sunrise));
+  Serial.print("Coucher soleil   : "); Serial.println(strTime(forecast->sunset));
+  Serial.print("Température °    : "); Serial.println(forecast->temp[0]);
+  Serial.print("Humidité         : "); Serial.println(forecast->humidity[0]);
+  Serial.print("Description EN   : "); Serial.println(forecast->main[0]);
+  Serial.print("Description      : "); Serial.println(forecast->description[0]);
+  Serial.print("Vitesse vent m/s : "); Serial.println(forecast->wind_speed[0]);
+  int windAngle = (forecast->wind_deg[0] + 22.5) / 45;
+  if (windAngle > 7) windAngle = 0;
+  String wind[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+  Serial.print("Angle vent       : "); Serial.println(forecast->wind_deg[0] + " -->" + wind[windAngle]);
+  Serial.print("Pression hPA     : "); Serial.println(forecast->pressure[0]);
+  Serial.print("Icone            : "); Serial.println(forecast->icon[0]);
+  Serial.print("ID               : "); Serial.println(forecast->id[0]);
+  Serial.print("Heure +3         : "); Serial.println(strTime(forecast->dt[1]));
+  Serial.print("Heure +6         : "); Serial.println(strTime(forecast->dt[2]));
+  Serial.print("Heure +9         : "); Serial.println(strTime(forecast->dt[3]));
+  Serial.print("Description +3   : "); Serial.println(forecast->description[1]);
+  Serial.print("Description +6   : "); Serial.println(forecast->description[2]);
+  Serial.print("Description +9   : "); Serial.println(forecast->description[3]);
+  Serial.print("Description +12  : "); Serial.println(forecast->description[4]);
+  Serial.print("Description +15  : "); Serial.println(forecast->description[5]);
   *******/
   
   lever   = strTime(forecast->sunrise);
@@ -1213,11 +1244,11 @@ void donneesmeteo() {
   tempExt = String(forecast->temp[0], 0);             // Température sans décimale
   if (tempExt.length() < 2) tempExt = " " + tempExt;  // et sur 2 caractères
   humExt = forecast->humidity[0];
-  icone = (forecast->icon[0]);
-  ID = (forecast->id[0]);
+  icone  = forecast->icon[0];
+  ID     = forecast->id[0];
   if (poisson) {
     if (wink) icone = "80d";
-  }
+  } 
 
   // Effacement des chaines pour libérer la mémoire
   delete forecast;
@@ -1244,10 +1275,10 @@ void getArrivals() {
   Serial.println("\nE1 : Initialisation de la connexion au serveur MaxPV!...");
   // Connexion au serveur web
   Serial.print("E1 : Connexion à MaxPV! : ");
-  Serial.print(serveurMaxPV);
+  Serial.print(serveurMaxPV + String(":") + portServeurMaxPV);
   Serial.println(pathData);
 
-  if (!client.connect(serveurMaxPV, 80)) {
+  if (!client.connect(serveurMaxPV, portServeurMaxPV)) {
     Serial.println("E1 : Connexion échouée!");
     return;
   }
@@ -1291,10 +1322,10 @@ void getArrivals() {
   // Effectué une seule fois pour alimenter ces paramètres (ces paramètres sont fixes)
   if (!puissancePV || !puissanceCumulus) {
     Serial.print("E2 : Connexion à MaxPV! : ");
-    Serial.print(serveurMaxPV);
+    Serial.print(serveurMaxPV + String(":") + portServeurMaxPV);
     Serial.println(pathParam);
 
-    if (!client.connect(serveurMaxPV, 80)) {
+    if (!client.connect(serveurMaxPV, portServeurMaxPV)) {
       Serial.println("E2 : Connexion échouée!");
       return;
     }
@@ -1332,10 +1363,10 @@ void getArrivals() {
     Serial.println("\nE3 : Initialisation de la connexion au serveur température...");
     // Connexion au serveur web
     Serial.print("E3 : Connexion à l'API température : ");
-    Serial.print(serveurTemperature);
+    Serial.print(serveurTemperature + String(":") + portServeurTemperature);
     Serial.println(pathTemperature);
 
-    if (!client.connect(serveurTemperature, 80)) {
+    if (!client.connect(serveurTemperature, portServeurTemperature)) {
       Serial.println("E3 : Connexion échouée!");
       return;
     }
@@ -1605,6 +1636,7 @@ void drawTimeDate() {
   if (minute(local_time) < 10) timeNow += "0";
   timeNow += minute(local_time);
 
+  // Format : numéro du jour + mois en abrégé
   dateNow = "";
   dateNow += day(local_time);
   dateNow += " ";
@@ -1635,7 +1667,7 @@ void handleClickGauche() {
 }
 
 // Double clic gauche : sortie de la veille
-void doubleClickGauche() {
+void handleDoubleClickGauche() {
   if (veille) {
     veille = false;
     dim = luminositeChoisie;
@@ -1656,13 +1688,25 @@ void handleClickDroit() {
   AfficheEcran(REGLE_ECRAN_SUIVANT);
 }
 
+// Double clic droit : retour à l'écran principal
+void handleDoubleClickDroit() {
+
+  AfficheEcran(REGLE_ECRAN_PRINCIPAL);
+}
+
 
 /****************************************
  ** Gestion ordre affichage des écrans **
  ****************************************/
 void AfficheEcran (uint regle) {
 
-  if (regle == REGLE_MEME_ECRAN) { // Afficher le même écran
+  if (regle == REGLE_ECRAN_PRINCIPAL) { // Afficher l'écran principal
+
+    AfficheEcranPrincipal();
+
+
+  } else if (regle == REGLE_MEME_ECRAN) { // Afficher le même écran
+
 
     switch (ecranCourant)
     {
@@ -1676,14 +1720,16 @@ void AfficheEcran (uint regle) {
         AfficheEcranReserveEnergie();
         break;
       case ECRAN_INDEX_JOURNALIERS :
-        AfficheIndexJournaliers();
+        AfficheEcranIndexJournaliers();
         break;
       default :
         AfficheEcranPrincipal();
         break;
     }
 
+
   } else { // Afficher l'écran suivant
+
 
     switch (ecranCourant)
     {
@@ -1695,12 +1741,8 @@ void AfficheEcran (uint regle) {
         break;
       case ECRAN_RESERVE_ENERGIE :
         // On passe à l'écran des index journaliers
-        AfficheIndexJournaliers();
+        AfficheEcranIndexJournaliers();
         break;
-      /*case ECRAN_INDEX_JOURNALIERS :
-        // On revient à l'écran principal
-        AfficheEcranPrincipal();
-        break;*/
       case ECRAN_INDEX_JOURNALIERS :
         // On revient à l'écran principal
         AfficheEcranPrincipal();
