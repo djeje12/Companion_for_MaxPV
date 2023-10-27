@@ -100,18 +100,13 @@ L'installation se termine avec les messages `Writing 100%` et `Hard reseting`
 
 # Guide d'utilisation
 
-Le bouton orange supérieur gauche permet d'ajuster la luminosité. Appuyer plusieurs fois sur ce bouton pour modifier la valeur de la luminosité. L'écran est masqué automatique lors du rafraichissement des données.
+## Ecran principal
 
-![Alt text](images/ecran_luminosite_1.png)
+L'écran est une synthèse des données les plus importantes fournies par MaxPV! agrémentées de données météo.
 
-
-Le bouton orange inférieur gauche permet de changer d'écran. Un double clic permet de revenir directement au premier écran, sans faire défiler les suivants.
+![Alt text](images/ecran_principal_1.png)
 
 Un indicateur dans le coin supérieur gauche vous averti de la fraicheur des données. Il faut attendre que le point vert disparaisse pour changer d'écran.
-
-Le bouton `Reset` placé sur le dessus de la carte permet de le redémarrer. Sinon, vous pouvez aussi débrancher/rebrancher l'alimentation.
-
-## Ecran principal
 
 Lorsqu'il n'y a pas de production PV, alors les heures de coucher et lever du soleil sont affichées.
 
@@ -134,7 +129,6 @@ Les couleurs indicatrices sont :
 
 L'indicateur wifi vous prévient de la qualité de la connexion. Si la connexion est mauvaise et que la récupération des données prend trop de temps, l'afficheur risque de redémarrer automatiquement au bout de 20 secondes.
 
-![Alt text](images/ecran_principal_1.png)
 ![Alt text](images/ecran_principal_2.png)
 ![Alt text](images/ecran_principal_3.png)
 ![Alt text](images/ecran_principal_4.png)
@@ -160,6 +154,17 @@ En situation de production PV, une couleur supplémentaire "blanche" indique la 
 Affiche les totaux quotidiens des indicateurs principaux de MaxPV. Bien sûr, les valeurs augmentent au cours de la journée, et repassent à zéro au changement de journée. La bascule est gérée par MaxPV!
 
 ![Alt text](images/ecran_index_journaliers_1.png)
+
+## Les boutons de commande
+
+Le bouton orange supérieur gauche permet d'ajuster la luminosité. Appuyer plusieurs fois sur ce bouton pour modifier la valeur de la luminosité. L'écran est masqué automatique lors du rafraichissement des données.
+
+![Alt text](images/ecran_luminosite_1.png)
+
+Le bouton orange inférieur gauche permet de changer d'écran. Un double clic permet de revenir directement au premier écran, sans faire défiler les suivants.
+
+Le bouton `Reset` placé sur le dessus de la carte permet de le redémarrer. Sinon, vous pouvez aussi débrancher/rebrancher l'alimentation.
+
 
 ## Interface Web
 
