@@ -188,6 +188,11 @@ En avril 2023, le tout était vendu à 22€.
 
 # Versions
 
+## Version 1.1 (19/02/2024)
+- Correction index journaliers suite à modifications de l'API dans MaxPV 3.60,
+- Ajout prise en compte de la température fournie par MaxPV 3.60.
+
+
 ## Version 1.0 (27/10/2023)
 - Ajout double clic sur bouton droit pour revenir à l'écran principal,
 - Amélioration lecture balise de fin pour les données du serveur de température,

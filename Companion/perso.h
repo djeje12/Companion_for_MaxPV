@@ -31,13 +31,16 @@ String units = "metric";  // ou "imperial"
 String language = "fr";
 
 
-/***************************************************************************
- * 4 paramètres pour afficher la température via un autre moyen que MaxPV! *
- ***************************************************************************/
-// Mettre "sonde" à true pour afficher la température du cumulus. Sinon mettre à false
+/***************************************************************
+ * Paramètres pour afficher la température avec ou hors MaxPV! *
+ ***************************************************************/
+// Mettre "sonde" à "true" pour afficher la température du cumulus sur l'écran principal. Sinon mettre à "false"
 bool sonde = false;
-// Pour afficher la température avec les décimales : mettre à false. Sinon mettre à true
-bool temperatureEntier = false;
+// Mettre "sondeMaxPV" à "true" si vous utilisez la sonde avec **MaxPV > 3.60**. Cela évite donc de faire des appels 
+// à un serveur externe pour la température. Sinon mettre à "false" si vous utilisez un serveur dédié pour la température.
+bool sondeMaxPV = true;
+
+/*** Début Paramétrage serveur de température ***/
 // Adresse IP du serveur pour appeler l'API retournant la température du ballon d'eau chaude
 //   Format : NNN.NNN.NNN.NNN
 char serveurTemperature[] = "192.168.***.***"; // Exemple : "192.168.1.12"
@@ -50,7 +53,8 @@ int portServeurTemperature = 80; // Exemple : "80" ou "8080"
 //     - Shelly 1P : /rpc/température.GetStatus?id=100
 //     - Shelly 1 : /status
 //     - Home Assistant : /json.htm?type=devices&rid=180 (à confirmer?)
-char pathTemperature[] = "/api/get?param=06"; // Exemple : "/myapi/data?key=a2z3da0"
+//     - MaxPV > 3.60 : /api/get?data=24 (mais privilégiez l'utilisation de "sondeMaxPV = true" si vous pouvez)
+char pathTemperature[] = "/api/get?data=24"; // Exemple : "/myapi/data?key=a2z3da0"
 // Définition des balises début et fin pour récupérer la température dans un chaine de caractères structurée, sinon laisser vide
 //   Si la valeur de la balise contient des double quotes ("), il faut rajouter un anti-slash (\) pour que le caractère soit interprété correctement!
 //   Exemple de balises début et fin pour :
@@ -59,6 +63,10 @@ char pathTemperature[] = "/api/get?param=06"; // Exemple : "/myapi/data?key=a2z3
 //     - HomeAssitant : baliseDebut = "Temp\" : " et baliseFin = "," (car les données retournées sont du type : {[...]"SubType" : "LaCrosse TX3","Temp" : 69.5,"Timers" : "false",[...]})
 String baliseDebut = "";
 String baliseFin = "";
+/*** Fin Paramétrage serveur de température ***/
+// Pour afficher la température avec les décimales : mettre à false. Sinon mettre à true
+bool temperatureEntier = false;
+
 
 // Puissance de coupure de votre compteur électrique (normalement il y a une tolérance de +10%, à confirmer).
 //   Utilisé pour l'affichage de la consommation sur l'écran de réserve d'énergie.
