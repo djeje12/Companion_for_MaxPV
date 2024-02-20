@@ -20,15 +20,16 @@ Les données affichées sont les suivantes :
 - les informations météo locales,
 - l'heure et la date locale,
 - l'heure du lever et du coucher de soleil,
-- synthèse quotidienne,
+- synthèse quotidienne.
   
 Ainsi que les fonctionnalités suivantes :
 - mise en veille programmable et réactivation automatique,
 - puissance du réseau wifi,
-- fonction serveur permettant de lire les données dans un navigateur
+- fonction serveur permettant de lire les données dans un navigateur.
   
 En option :
-- température du cumulus, si vous avez une sonde connectée au réseau local.
+- température du cumulus, si vous avez une sonde connectée au réseau local, ou une sonde connectée à MaxPV (à partir de la vesion 3.60),
+- les jours EDF TEMPO restants et la couleur du jour et du lendemain.
 
 Les données sont réactualisées toutes les 10 secondes. 
 
@@ -155,6 +156,17 @@ Affiche les totaux quotidiens des indicateurs principaux de MaxPV. Bien sûr, le
 
 ![Alt text](images/ecran_index_journaliers_1.png)
 
+## Ecran des jours EDF TEMPO restants
+
+Affiche le nombre de jours EDF TEMPO restants par couleur. Ainsi que la couleur du jour actuel et du lendemain.
+Un rafraichissemnet est effectué toutes les heures sur le portail edf.fr pour rafraichir les valeurs.
+
+![Alt text](images/ecran_tempo_1.png)
+
+La couleur des jours est également affichée en bas à gauche de l'écran principal. Le 1er carré pour le jour actuel (ici "blanc"), le 2eme carré pour le lendemain (ici "bleu").
+
+![Alt text](images/ecran_principal_7.png)
+
 ## Les boutons de commande
 
 Le bouton orange supérieur gauche permet d'ajuster la luminosité. Appuyer plusieurs fois sur ce bouton pour modifier la valeur de la luminosité. L'écran est masqué automatique lors du rafraichissement des données.
@@ -187,6 +199,10 @@ En avril 2023, le tout était vendu à 22€.
 ![Alt text](images/lilygo.png)
 
 # Versions
+
+## Version 1.2 (20/02/2024)
+- Ajout écran affichage des jours EDF TEMPO (activation paramétrable).
+
 
 ## Version 1.1 (19/02/2024)
 - Correction index journaliers suite à modifications de l'API dans MaxPV 3.60,

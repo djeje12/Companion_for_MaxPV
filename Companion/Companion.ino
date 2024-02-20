@@ -1,7 +1,7 @@
 //**********************************************************************************************************
 // COMPANION pour MaxPV!                                                                                  **/
 //
-String Version = "1.1";
+String Version = "1.2beta";
 //                                                                                                        **
 /***********************************************************************************************************
 ** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie **
@@ -52,6 +52,7 @@ String Version = "1.1";
 #define ECRAN_INDEX_JOURNALIERS 2
 #define ECRAN_METEO             3 // Déclaré, mais non géré
 #define ECRAN_RESERVE_ENERGIE   4
+#define ECRAN_JOURS_TEMPO       5
 int ecranCourant = -1;            // Identifie l'écran à afficher
 #define REGLE_MEME_ECRAN        0
 #define REGLE_ECRAN_SUIVANT     1
@@ -87,7 +88,7 @@ int puissancePV = 0;      // Production max en watt. Alimenté automatiquement �
 int puissanceCumulus = 0; // puissance cumulus en watt. Alimenté automatiquement à  partir de P_RESISTANCE dans MaxPV!
 
 long lastTime = 0;
-long lastMaxPV = 0;
+long lastUpdateMaxPV = 0;
 String Months[13] = { "Mois", "Jan", "Fev", "Mars", "Avril", "Mai", "Juin", "Juill", "Aout", "Sept", "Oct", "Nov", "Dec" };
 String IP;      // Adresse IP de connexion du Companion
 String RSSI;    // Puissance signal WiFi
@@ -101,9 +102,11 @@ bool wink = false;
 OneButton buttonGauche(0, true);  // Bouton éclairage
 OneButton buttonDroit(14, true);  // Bouton cumuls
 
+bool premiereLectureDonneesMaxPV = true; // Sera mis à false quand les données MaxPV auront été lues au moins une fois
 // Pointeurs pour relance recherche valeurs
 bool awaitingArrivals = true;    // Passe à "false" quand on vient de lire les données. Passe à "true" toutes les 10s lors de la réinit du cycle pour rafraichir les données
 bool arrivalsRequested = false;  // Passe à "true" quand on est déjà en train de lire les données. Passe à "false" toutes les 10s lors de la réinit du cycle
+
 
 // Variables pour dimmer
 const int PIN_LCD_BL = 38;
@@ -137,11 +140,12 @@ String MsgParamSplit[MAXPV_PARAM_API_SIZE];  // Valeurs à récupérer depuis l'
 String lever, coucher, tempExt, humExt, icone, ID;
 OW_Weather ow;  // Weather forecast librairie instance
 // Update toutes les 15 minutes, jusqu'à 1000 requêtes par jour gratuit (soit ~40 par heure)
-const int UPDATE_INTERVAL_SECS = 15 * 60UL;  // 15 minutes (900s)
+const int UPDATE_WEATHER_INTERVAL_SECS = 15 * 60UL;  // 15 minutes (900s)
 bool booted = true;
-long lastDownloadUpdate = millis();
+long lastDownloadUpdateWeather = millis();
 String timeNow = "";
 String dateNow = "";
+String dateNow2 = "";
 
 // Variables pour serveur web
 WiFiServer server(80);
@@ -151,7 +155,17 @@ unsigned long previousTime = 0;        // Previous time
 // Define timeout time in milliseconds (example: 2000ms = 2s)
 const long timeoutTime = 5000;
 
-bool firstGetArrivals = true;
+
+// Déclaration pour les jours TEMPO
+// Code repris de "Afficheur_Tempo" de pjeantaud
+// A corriger, car on utilise une 2ième API JSON (en plus de celle de la météo), idem pour la connexion Web. Mais bon ça marche et pas eu suffisament de temps pour optimiser tout ça...
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+long lastUpdateTempo = 0;
+const int UPDATE_INTERVALLE_TEMPO = 60 * 60UL; // Soit 3600s (1h)
+String restantsBleus, restantsBlancs, restantsRouges, JourJJ, JourJJ1;
+uint32_t colorTempoJJ  = TFT_LIGHTGREY;
+uint32_t colorTempoJJ1 = TFT_LIGHTGREY;
 
 // Transforme les kWh en Wh (pour les index journalier)
 int kwh_to_wh(float kwh) { return kwh * 1000;}
@@ -202,7 +216,7 @@ void setup() {
   Serial.println("Configuraton du WDT...");
   esp_task_wdt_init(WDT_TIMEOUT, true);  //enable panic so ESP32 restarts
   esp_task_wdt_add(NULL);                //add current thread to WDT watch
-  lastTime = millis();                   // Récupération du temps de départ du lancement du Watchdog pour prévenir du redémarrage éventuel pendant la phase de lancement et de connexion
+  lastTime = millis();             // Récupération du temps de départ du lancement du Watchdog pour prévenir du redémarrage éventuel pendant la phase de lancement et de connexion
 
   // delete old config et vérif de deconnexion
   WiFi.disconnect(true);
@@ -336,33 +350,40 @@ void loop() {
 
   // Lit heure toutes les secondes
   if (lastTime + 1000 < millis()) {
-    drawTimeDate();
+    GetTimeDate();
     lastTime = millis();
   }
 
   // Données météo
   // Test pour voir si un rafraissement est nécessaire
-  if (booted || (millis() - lastDownloadUpdate > 1000UL * UPDATE_INTERVAL_SECS)) { // 15 min convertis en ms
-    donneesmeteo();
-    lastDownloadUpdate = millis();
+  if (booted || (millis() - lastDownloadUpdateWeather > 1000UL * UPDATE_WEATHER_INTERVAL_SECS)) { // 15 min convertis en ms
+    RecuperationDonneesMeteo();
+    lastDownloadUpdateWeather = millis();
   }
+
+  // Données EDF jours TEMPO
+  if (affichageEcranTempo)
+    if (booted || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO * 1000UL < millis())) {
+      RecuperationDonneesJoursTempo();
+      lastUpdateTempo = millis();
+    }
 
   // Rafraichissement des données émises par MaxPV
   if (awaitingArrivals) {
     if (!arrivalsRequested) {
       arrivalsRequested = true;
-      getArrivals();
-      decrypte();
+      RecuperationDonneesMaxPV();
+      FormatageDonnesMaxPV();
       // On réaffiche l'écran courant
       AfficheEcran(REGLE_MEME_ECRAN);
     }
   }
 
   // Relance de lecture des données (10 sec)
-  if (lastMaxPV + MAXPV_DELAI_MAJ * 1000 < millis()) {
+  if (lastUpdateMaxPV + MAXPV_DELAI_MAJ * 1000 < millis()) {
     Serial.println("Rafraichissement des données...");
     resetCycle();
-    lastMaxPV = millis();
+    lastUpdateMaxPV = millis();
   }
 
   // Teste si la veille est demandée
@@ -383,6 +404,92 @@ void loop() {
   booted = false;
   esp_task_wdt_reset();
 }
+
+
+
+
+/***************************************************************************************
+**   Récupération des infos Tempo                                                     **
+**   Pour vérifier la période active de Tempo :                                       **
+**   if (( numJour < 91 ) || ( numJour > 303 )).                                      **
+***************************************************************************************/
+void RecuperationDonneesJoursTempo() {
+
+  String requeteTempo;
+
+  Serial.println("[HTTP TEMPO] begin...");
+  HTTPClient http;
+  //
+  // Première requete pour connaitre la couleur du jour J et J+1
+  //
+  requeteTempo = ("https://particulier.edf.fr/services/rest/referentiel/searchTempoStore?dateRelevant=");
+  //requeteTempo += (an) + '-' + (mois) + '-' + (jour);
+  requeteTempo += String(dateNow2);
+  Serial.println(requeteTempo);
+  http.begin(requeteTempo);
+
+  Serial.print("[HTTP TEMPO] GET...\n");
+  int httpJour = http.GET();
+  Serial.printf("", httpJour);
+  String recup1 = http.getString();
+  Serial.println(recup1);
+
+  StaticJsonDocument<200> doc1;   
+  deserializeJson(doc1, recup1); 
+  const char* JourJ = doc1["couleurJourJ"];
+  const char* JourJ1 = doc1["couleurJourJ1"];
+
+  JourJJ =  String(JourJ); 
+  Serial.println("Jour J : " + JourJJ);
+  JourJJ1 = String(JourJ1);
+  Serial.println("Jour J+1 : " + JourJJ1);
+  // Résultats :
+  colorTempoJJ = Couleur_Jour_Tempo (JourJJ);
+  colorTempoJJ1 = Couleur_Jour_Tempo (JourJJ1);
+
+  //
+  // Deuxième requête pour connaitre le nombre de jours restants par couleur
+  //
+  requeteTempo = "https://particulier.edf.fr/services/rest/referentiel/getNbTempoDays?TypeAlerte=TEMPO";
+  Serial.println(requeteTempo);
+  http.begin(requeteTempo);
+  
+  Serial.println("[HTTP] GET...");
+  int httpJoursRestants = http.GET();   
+  String recup2 = http.getString();
+
+  StaticJsonDocument<200> doc2;   
+  deserializeJson(doc2, recup2); 
+  int couleurParamBLANC = doc2["PARAM_NB_J_BLANC"];
+  int couleurParamROUGE = doc2["PARAM_NB_J_ROUGE"];
+  int couleurParamBLEU = doc2["PARAM_NB_J_BLEU"];
+  http.end();
+  Serial.println("[HTTP TEMPO] End");
+
+  // Résultats :
+  restantsBleus =  String(couleurParamBLEU); 
+  restantsBlancs = String(couleurParamBLANC);
+  restantsRouges = String(couleurParamROUGE); 
+  Serial.println("TEMPO Jours restants => Bleu : " + restantsBleus+ " Blancs : " + restantsBlancs+ " Rouges : " + restantsRouges);
+
+  esp_task_wdt_reset();
+}
+
+/* Détermine la couleur du jour TEMPO en fonction du texte retourné */
+uint32_t Couleur_Jour_Tempo (String texteCouleurJour)
+{
+  if      (texteCouleurJour.equalsIgnoreCase("TEMPO_BLEU"))
+      return TFT_BLUE;
+  else if (texteCouleurJour.equalsIgnoreCase("TEMPO_BLANC"))
+      return TFT_WHITE;
+  else if (texteCouleurJour.equalsIgnoreCase("TEMPO_ROUGE"))
+      return TFT_RED;
+  else if (texteCouleurJour.equalsIgnoreCase("NON_DEFINI"))
+      return TFT_LIGHTGREY;
+  else
+      return TFT_LIGHTGREY;
+}
+
 
 
 
@@ -437,8 +544,8 @@ void AfficheEcranPrincipal() {
   sprite.drawRoundRect(0, 57, 226, 55, RECT_RADIUS, TFT_LIGHTGREY);
   sprite.drawString("ROUTAGE ECS", 113, 68, 2);
   sprite.drawRoundRect(0, 114, 226, 55, 4, TFT_LIGHTGREY);
-  if (CO.toInt() >= 0) sprite.drawString(" CONSOMMATION RESEAU ", 115, 126, 2);
-  else sprite.drawString(" EXPORTATION RESEAU ", 115, 126, 2);
+  if (CO.toInt() >= 0)  sprite.drawString(" CONSOMMATION RESEAU ", 115, 126, 2);
+  else                  sprite.drawString(" EXPORTATION RESEAU ", 115, 126, 2);
 
   // Panneau de droite sur l'écran : heure, date, batterie
   sprite.drawRoundRect(234,  0, 86, 54, RECT_RADIUS, TFT_LIGHTGREY);
@@ -531,8 +638,8 @@ suite:
   // Gestion batterie
   if (lipo) batterieStatus();
 
-  // Affichage de la température du cumulus si sonde présente
-  if (sonde) {
+  // Affichage de la température du cumulus si sonde de température présente
+  if (sondeTemperature) {
 
     // Pour afficher le cercle de température coloré en fonction de la valeur de la température
     selectedColor = TFT_CYAN;
@@ -557,10 +664,12 @@ suite:
     }
   }
 
+  //
   // Affichage des valeurs des compteurs
+  //
   sprite.setFreeFont(&Orbitron_Light_24);  // police d'affichage "Orbitron_Light_24", liste des caractères disponibles https://github.com/Bodmer/TFT_eSPI/blob/master/Fonts/Custom/Orbitron_Light_24.h
 
-  // Affichage valeur PV
+  // Affichage valeur production PV
   if (PV.toInt() > 0)  {
     if (nbrentier) {
       strAjoutSepMillier(str2Display, PV.toInt());
@@ -590,6 +699,13 @@ suite:
     sprite.drawString(String(str2Display) + " w", 113, 150);
   } else {
     sprite.drawString(replacePointParVirgule(CO) + " w", 113, 150);
+  }
+  // Affichage de la couleur tempo du jour et j+1 sur l'écran principal
+  if (affichageEcranTempo) {
+    //sprite.fillRoundRect(2, 116, 15, 51, RECT_RADIUS, colorTempoJJ);
+    //sprite.fillRoundRect(19, 116, 5, 51, RECT_RADIUS, colorTempoJJ1);
+    sprite.fillRoundRect(4, 124, 20, 20, RECT_RADIUS, colorTempoJJ);
+    sprite.fillRoundRect(4, 146, 20, 20, RECT_RADIUS, colorTempoJJ1);
   }
 
 
@@ -849,12 +965,82 @@ void AfficheEcranReserveEnergie() {
 }
 
 
+/************************************************************************
+ ** Permet l'affichage des jours TEMPO d'ENEDIS
+ ************************************************************************/
+// Zone de traçage : 316 px (car cadre gris autour)
+// Tempo EDF : https://www.hellowatt.fr/fournisseurs/edf/tarif-tempo
+//             https://particulier.edf.fr/fr/accueil/gestion-contrat/options/tempo.html#/selection-bp
+// 
+// - 22 jours rouges, répartis du 1er novembre au 31 mars, sauf les samedis et les dimanches ;
+// - 43 jours blancs, répartis sur l’ensemble de l’année calendaire, sauf les dimanches ;
+// - 300 jours bleus (ou 301 les années bissextiles), les dimanches sont tous des jours bleus.
+// Période du 1er septembre 20xx au 31 août 20xx+1
+void  AfficheEcranJoursTempo() {
+
+  uint hauteurBarre = 0;
+
+  ecranCourant = ECRAN_JOURS_TEMPO;
+
+  // Nombres Max de jours par catégorie
+  uint nbJoursBleusMax = 300; // 301 pour les années bissextiles, mais on ne le prend pas en compte
+  uint nbJoursBlancsMax = 43;
+  uint nbJoursRougesMax = 22;
+
+  // Jours restants reçus de l'API Rest ENEDIS
+  uint nbJoursBleusRestants = restantsBleus.toInt();
+  uint nbJoursBlancsRestants = restantsBlancs.toInt();
+  uint nbJoursRougesRestants = restantsRouges.toInt();
+
+  sprite.fillSprite(TFT_BLACK);
+  sprite.fillRoundRect(0, 2, 320, 25, 0, TFT_DARKGREY);
+  // Encadrement
+  sprite.drawRoundRect(0, 32, 320, 138, RECT_RADIUS, TFT_LIGHTGREY);
+
+  // Titre
+  sprite.setTextDatum(MC_DATUM);
+  sprite.setTextColor(TFT_WHITE);
+  sprite.drawString("JOURS TEMPO RESTANTS", 160, 15, 2);
+
+  // Barres pour chaque couleur des jours TEMPO (Y=34 à 134)
+  hauteurBarre = 134 * nbJoursBleusRestants / nbJoursBleusMax;
+  sprite.drawRoundRect(  2, 34, 80, 134, RECT_RADIUS, TFT_BLUE); // Cadre de la jauge
+  sprite.fillRoundRect(  2, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_BLUE);
+  hauteurBarre = 134 * nbJoursBlancsRestants / nbJoursBlancsMax;
+  sprite.drawRoundRect( 84, 34, 80, 134, RECT_RADIUS, TFT_WHITE); // Cadre de la jauge
+  sprite.fillRoundRect( 84, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_WHITE);
+  hauteurBarre = 134 * nbJoursRougesRestants / nbJoursRougesMax;
+  sprite.drawRoundRect(166, 34, 80, 134, RECT_RADIUS, TFT_RED); // Cadre de la jauge
+  sprite.fillRoundRect(166, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_RED);
+
+  // Affichage valeurs jours
+  sprite.setTextDatum(MC_DATUM);
+  sprite.setTextColor(TFT_LIGHTGREY);
+  sprite.drawString(String(nbJoursBleusRestants)  + " j",  42, 101); 
+  sprite.drawString(String(nbJoursBlancsRestants) + " j", 124, 101); 
+  sprite.drawString(String(nbJoursRougesRestants) + " j", 206, 101); 
+  
+  
+  // Affichage couleur du jour J et jour J+1. Si indéfini => gris
+  // Cercle pour J+1
+  sprite.setTextColor(TFT_BLACK);
+  sprite.fillSmoothCircle(282, 140, 20, colorTempoJJ1);
+  sprite.drawString("+1", 282, 142, 4); 
+  // Cercle pour J
+  sprite.setTextColor(TFT_BLACK);
+  sprite.fillSmoothCircle(282, 80, 30, colorTempoJJ);
+  //sprite.drawString("J", 282, 80, 4); 
+  sprite.drawString(String(dateNow), 282, 80, 2);
+
+  // Rafraichissement écran (indispensable après avoir tout dessiné)
+  sprite.pushSprite(0, 0);
+}
 
 
 /***************************************************************************************
 **                    Decryptage des valeurs lues dans le xml
 ***************************************************************************************/
-void decrypte() {
+void FormatageDonnesMaxPV() {
 
   delay(1000);
 
@@ -863,7 +1049,7 @@ void decrypte() {
   // paramMaxPV : chaine avec toutes les valeurs recherchées
   if (!puissancePV or !puissanceCumulus) Serial.println("Paramètres MaxPV! reçus : '" + paramMaxPV + "'");
   // dataTemperature : chaine contenant une seule valeur de température (à améliorer pour gérer plusieurs valeurs). Utilisé uniquement dans le cas où l'on utilise un serveur de température hors MaxPV
-  if (sonde && !sondeMaxPV) Serial.println("Donnée température reçue : " + dataTemperature);
+  if (sondeTemperature && !sondeTemperatureMaxPV) Serial.println("Donnée température reçue : " + dataTemperature);
 
   // Mise en variables des données MaxPV!, MsgDataSplit[0 à MAXPV_DATA_API_SIZE-1]
   split(MsgDataSplit, MAXPV_DATA_API_SIZE, dataMaxPV, ',');
@@ -878,8 +1064,8 @@ void decrypte() {
   // Mise en variable de la température
   // Si les données reçues sont structurées, on recherche la température d'après les balises de fin et de début
   // Exemple : Shelly 1P retourne une chaine du type : {"id": 100,"tC":21.9, "tF":71.5}
-  // Si on utilise la sonde MaxPV, alors on récupère la température depuis les "Data" MaxPV
-  if (sondeMaxPV) {
+  // Si on utilise la sonde de température de MaxPV, alors on récupère la température depuis les "Data" MaxPV
+  if (sondeTemperatureMaxPV) {
     TEMPCU = MsgDataSplit[23];
   } else {
     if (baliseDebut.length() > 0 and baliseFin.length() > 0) {
@@ -887,7 +1073,7 @@ void decrypte() {
       int endValue   = dataTemperature.indexOf(baliseFin,startValue+1);
       TEMPCU = dataTemperature.substring(startValue + baliseDebut.length(), endValue);
     } else {
-      TEMPCU = dataTemperature;  // Sonde température cumulus
+      TEMPCU = dataTemperature;  // Sonde de température cumulus
     }
   }
 
@@ -911,7 +1097,7 @@ void decrypte() {
   Serial.println(" - Conso : " + CO);
   Serial.println(" - Production PV : " + PV);
   Serial.println(" - Routage : " + CU);
-  if (sonde) Serial.println(" - Température : " + TEMPCU);*/
+  if (sondeTemperature) Serial.println(" - Température : " + TEMPCU);*/
 
   // Formatage des valeurs pour affichage sur l'écran
   PV = String(PV.toInt());  // (avec prod en + ou en -)
@@ -1205,7 +1391,7 @@ void batterieStatus() {
 **                           Réception des données météo
 **                 Valeurs issues de Open Weather (Gestion Forecast)
 ***************************************************************************************/
-void donneesmeteo() {
+void RecuperationDonneesMeteo() {
   // Valeurs issues de Open Weather (Gestion Forecast)
   OW_forecast *forecast = new OW_forecast;
   ow.getForecast(forecast, api_key, latitude, longitude, units, language);
@@ -1265,9 +1451,9 @@ void donneesmeteo() {
 /***************************************************************************************
 **                         Relancement du cycle de lecture
 ***************************************************************************************/
-void getArrivals() {
+void RecuperationDonneesMaxPV() {
 
-  if (!firstGetArrivals) { // Pour éviter d'afficher un écran noir après le premier démarrage
+  if (!premiereLectureDonneesMaxPV) { // Pour éviter d'afficher un écran noir après le premier démarrage
     // Affichage indicateur de rafraichissement des données : démarrage
     sprite.drawSmoothCircle(8, 8, 4, TFT_GREENYELLOW, TFT_TRANSPARENT); 
     sprite.pushSprite(0, 0);
@@ -1363,7 +1549,7 @@ void getArrivals() {
   /*****************************************************
    * Etape 3 : récupération des données de température *
    *****************************************************/
-  if (sonde && !sondeMaxPV) {
+  if (sondeTemperature && !sondeTemperatureMaxPV) {
     // Use WiFiClient class to create TLS connection
     Serial.println("\nE3 : Initialisation de la connexion au serveur température...");
     // Connexion au serveur web
@@ -1400,13 +1586,13 @@ void getArrivals() {
     esp_task_wdt_reset();
   }
 
-  if (!firstGetArrivals) {
+  if (!premiereLectureDonneesMaxPV) {
     // Indicateur de rafraichissement des données => statut terminé (il sera effacé lors du rafraichissement de l'écran)
     sprite.fillSmoothCircle(8, 8, 4, TFT_GREENYELLOW);
     sprite.pushSprite(0, 0);
   }
   awaitingArrivals = false;
-  firstGetArrivals = false;
+  premiereLectureDonneesMaxPV = false;
 }
 
 
@@ -1509,7 +1695,7 @@ void serveurweb() {
             clientweb.println(" W");
             clientweb.println("</div>");
 
-            if (sonde) {
+            if (sondeTemperature) {
               clientweb.println("<div class=\"w3-card-4 w3-pale-blue w3-padding-16 w3-xxxlarge w3-center\">");
               clientweb.println("<p>Température cumulus</p>");
               clientweb.print(replacePointParVirgule(TEMPCU));  // Valeur Température cumulus
@@ -1628,9 +1814,9 @@ String strTime(time_t unixTime) {
 }
 
 /***************************************************************************************
-**                        Decryptage de l'heure et Date
+**                        Lecture de l'heure et Date
 ***************************************************************************************/
-void drawTimeDate() {
+void GetTimeDate() {
   // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
   time_t local_time = TIMEZONE.toLocal(now(), &tz1_Code);
 
@@ -1648,6 +1834,16 @@ void drawTimeDate() {
   dateNow += String(Months[month(local_time)]);
 
   //Serial.println("Date et heure locale : " + dateNow + " " + timeNow);
+
+  // Format : AAAA-MM-JJ
+  dateNow2 = "";
+  dateNow2 += year(local_time);
+  dateNow2 += "-";
+  dateNow2 += month(local_time);
+  dateNow2 += "-";
+  dateNow2 += day(local_time);
+
+  //Serial.println("Date et heure locale 2 : " + dateNow2);
 
   if (poisson) {if (dateNow == "1 Avril") wink = true;}
 }
@@ -1727,6 +1923,9 @@ void AfficheEcran (uint regle) {
       case ECRAN_INDEX_JOURNALIERS :
         AfficheEcranIndexJournaliers();
         break;
+      case ECRAN_JOURS_TEMPO :
+        AfficheEcranJoursTempo();
+	      break;
       default :
         AfficheEcranPrincipal();
         break;
@@ -1750,6 +1949,13 @@ void AfficheEcran (uint regle) {
         break;
       case ECRAN_INDEX_JOURNALIERS :
         // On revient à l'écran principal
+        if (affichageEcranTempo)
+          AfficheEcranJoursTempo();
+        else
+          AfficheEcranPrincipal();
+        break;
+      case ECRAN_JOURS_TEMPO : 
+        // On revient à l'écran principal
         AfficheEcranPrincipal();
         break;
       default :
@@ -1770,7 +1976,7 @@ void test() {
   CU = "1290";
   TEMPCU = "55,5";
   tempExt = "3";
-  sonde = true;
+  sondeTemperature = true;
   chauffageElectr = true;
   veille = false;
 }

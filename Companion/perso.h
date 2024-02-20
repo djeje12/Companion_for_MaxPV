@@ -30,15 +30,20 @@ String api_key = "**************************";
 String units = "metric";  // ou "imperial"
 String language = "fr";
 
+/*******************************************
+ * Affichage des informations TEMPO de EDF *
+ *******************************************/
+// Mettre à true si on souhaite afficher l'écran du ombre de jours TEMPO (fournis par EDF)
+bool affichageEcranTempo = true;
 
 /***************************************************************
  * Paramètres pour afficher la température avec ou hors MaxPV! *
  ***************************************************************/
-// Mettre "sonde" à "true" pour afficher la température du cumulus sur l'écran principal. Sinon mettre à "false"
-bool sonde = false;
-// Mettre "sondeMaxPV" à "true" si vous utilisez la sonde avec **MaxPV > 3.60**. Cela évite donc de faire des appels 
+// Mettre "sondeTemperature" à "true" pour afficher la température du cumulus sur l'écran principal. Sinon mettre à "false"
+bool sondeTemperature = false;
+// Mettre "sondeTemperatureMaxPV" à "true" si vous utilisez la sonde de température avec **MaxPV > 3.60**. Cela évite donc de faire des appels 
 // à un serveur externe pour la température. Sinon mettre à "false" si vous utilisez un serveur dédié pour la température.
-bool sondeMaxPV = true;
+bool sondeTemperatureMaxPV = true;
 
 /*** Début Paramétrage serveur de température ***/
 // Adresse IP du serveur pour appeler l'API retournant la température du ballon d'eau chaude
