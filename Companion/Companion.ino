@@ -38,9 +38,10 @@ String Version = "1.2beta";
 #include "logo.h"          // Logo de départ
 #include "images.h"        // Images affichées sur l'écran
 #include "meteo.h"         // Icones météo
-#include <ESPmDNS.h>       //Pour le mDNS
+#include <ESPmDNS.h>       // Pour le mDNS
+#include <esp_adc_cal.h>   // Pour gérer la calibration de la batterie (cf. https://github.com/Xinyuan-LilyGO/T-Display-S3/blob/main/examples/GetBatteryVoltage/GetBatteryVoltage.ino)
 // Watchdog (relance le Companion si perte de signal) Idée géniale de Bellule!
-#include <esp_task_wdt.h>  //watchdog en cas de déconnexion
+#include <esp_task_wdt.h>  // Watchdog en cas de déconnexion
 #define WDT_TIMEOUT 20     // Délai d'activation du timeout du watchdog en secondes
 
 #define MAXPV_DELAI_MAJ       10  // Intervalle en s de rafraichissement des données de MaxPV!
@@ -92,7 +93,6 @@ long lastUpdateMaxPV = 0;
 String Months[13] = { "Mois", "Jan", "Fev", "Mars", "Avril", "Mai", "Juin", "Juill", "Aout", "Sept", "Oct", "Nov", "Dec" };
 String IP;      // Adresse IP de connexion du Companion
 String RSSI;    // Puissance signal WiFi
-uint32_t volt;  // Voltage batterie
 bool wink = false;
 
 // Boutons :
@@ -118,6 +118,9 @@ int dim, x;
 
 // Variables pour batterie
 int nbbarresBatterieStatus = -1;
+uint32_t tensionBatterie;  // Voltage batterie en mV
+#define PIN_POWER_ON 15
+#define PIN_BAT_VOLT 4
 
 // Variables affichant les valeurs reçues depuis le MaxPV!
 String PV, CU, CO, TEMPCU;            // Consos et températures.
@@ -177,10 +180,11 @@ float wh_to_kwh(float wh) {return wh / 1000.0;}
 ///////////////////////////////////////////////////////////////////////////////////////
 void setup() {
 
-  // Activation du port batterie interne
+  // Activation du port batterie interne pour LilyGo S3(cf https://github.com/Xinyuan-LilyGO/T-Display-S3?tab=readme-ov-file#9%EF%B8%8F%E2%83%A3-faq)
   if (lipo) {
-    pinMode(15, OUTPUT);
-    digitalWrite(15, 1);
+    // This IO15 must be set to HIGH, otherwise nothing will be displayed when USB is not connected.
+    pinMode(PIN_POWER_ON, OUTPUT);
+    digitalWrite(PIN_POWER_ON, HIGH);
   }
 
   // Initialisation ecran
@@ -199,6 +203,8 @@ void setup() {
 
   // Affichage logo depart
   lcd.fillScreen(TFT_BLACK);
+  //w = lcd.width();
+  //h = lcd.height();
   depart.createSprite(320, 170);
   depart.setSwapBytes(true);
   depart.pushImage(20, 15, 280, 120, splashscreen);
@@ -216,7 +222,7 @@ void setup() {
   Serial.println("Configuraton du WDT...");
   esp_task_wdt_init(WDT_TIMEOUT, true);  //enable panic so ESP32 restarts
   esp_task_wdt_add(NULL);                //add current thread to WDT watch
-  lastTime = millis();             // Récupération du temps de départ du lancement du Watchdog pour prévenir du redémarrage éventuel pendant la phase de lancement et de connexion
+  lastTime = millis();                   // Récupération du temps de départ du lancement du Watchdog pour prévenir du redémarrage éventuel pendant la phase de lancement et de connexion
 
   // delete old config et vérif de deconnexion
   WiFi.disconnect(true);
@@ -350,10 +356,41 @@ void loop() {
 
     // Etat batterie
     if (lipo) {
-      // Sur ESP32, la lecture analogique est sur 12 bits donc retourne une valeur entre 0-4095. Voltage de 3,3V.
-      //volt = (analogRead(4) * 2 * 3.3 * 1000) / 4096;
-      volt = (analogRead(4) * 3.3 * 1000) / 4096; // en mV
-      //Serial.println("AnalogRead : " + String(analogRead(4)) + " => Tension batterie : " + String(volt));
+      // Documentation :
+      // https://github.com/Xinyuan-LilyGO/T-Display-S3
+      // https://github.com/Xinyuan-LilyGO/T-Display-S3/blob/main/examples/GetBatteryVoltage/GetBatteryVoltage.ino
+      // https://docs.espressif.com/projects/esp-idf/en/release-v3.3/api-reference/peripherals/adc.html
+      // https://github.com/Xinyuan-LilyGO/TTGO-T-Display/blob/master/TFT_eSPI/examples/FactoryTest/FactoryTest.ino
+      esp_adc_cal_characteristics_t adc_chars;
+
+      // Get the internal calibration value of the chip
+      // "1100" is actually 1.1V in mV. 1.1V is the internal reference voltage that readings get compared to.
+      esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+      uint32_t raw = analogRead(PIN_BAT_VOLT);
+      tensionBatterie = esp_adc_cal_raw_to_voltage(raw, &adc_chars) * 2; //The partial pressure is one-half
+
+      // Bizarre, car ce calcul semblerait plus juste quand on compare avec un Voltmètre. Bon, dans certains cas juste...
+      //float battery_voltage = ((float)raw / 4095.0) * 2.0 * 3.3 * 1100;
+
+      // cf. : https://github.com/Xinyuan-LilyGO/TTGO-T-Display/blob/master/TFT_eSPI/examples/FactoryTest/FactoryTest.ino
+      /*if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+          Serial.printf("eFuse Vref:%u mV", adc_chars.vref);
+          vref = adc_chars.vref;
+      } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
+          Serial.printf("Two Point --> coeff_a:%umV coeff_b:%umV\n", adc_chars.coeff_a, adc_chars.coeff_b);
+      } else {
+          Serial.println("Default Vref: 1100mV");
+      }*/
+
+      // If the battery is not connected, the ADC detects the charging voltage of TP4056, which is inaccurate.
+      // Can judge whether it is greater than 4300mV. If it is less than this value, it means the battery exists.
+      /*if (tensionBatterie > 4300) {
+          AfficheDebugTFT ("No battery! U:" + String(tensionBatterie) + "mV");
+      } else {
+          AfficheDebugTFT ("U: " + String(tensionBatterie) + "mV");
+      }*/
+      // Message débug pour afficher tension de la batterie
+      AfficheDebugTFT (String(tensionBatterie) + "mV");
     }
     
     lastTime = millis();
@@ -1384,12 +1421,12 @@ void AffichageSignalWifi() {
 ***************************************************************************************/
 void batterieStatus() {
 
-  // Voltage pour batterie, les chiffres sont des mV à modifier suivant votre batterie
-  if      (volt < 2000) nbbarresBatterieStatus = 0;
-  else if (volt < 2500) nbbarresBatterieStatus = 1;
-  else if (volt < 3000) nbbarresBatterieStatus = 2;
-  else if (volt < 3300) nbbarresBatterieStatus = 3;
-  else                  nbbarresBatterieStatus = 3;
+  // Tension pour la batterie (en mV)
+  if      (tensionBatterie < 2500) nbbarresBatterieStatus = 0;
+  else if (tensionBatterie < 3000) nbbarresBatterieStatus = 1;
+  else if (tensionBatterie < 3500) nbbarresBatterieStatus = 2;
+  else if (tensionBatterie < 4000) nbbarresBatterieStatus = 3;
+  else                             nbbarresBatterieStatus = 3;
 }
 
 
@@ -1972,6 +2009,15 @@ void AfficheEcran (uint regle) {
   }
 }
 
+/* Affiche le message de Débug sur l'écran TFT (car parfois plus pratique ;) )*/
+void AfficheDebugTFT (String message)
+{
+  sprite.setTextColor(TFT_YELLOW,TFT_BLACK);
+  // Le message est cadré en bas à droite
+  sprite.setTextDatum(BR_DATUM);
+  sprite.drawString(message, 320, 170, 2);
+  sprite.pushSprite(0, 0);
+}
 
 /***************************************************************************************
 **     Routine de test pour afficher toutes les icones sur l'écran
