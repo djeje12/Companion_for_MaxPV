@@ -117,7 +117,7 @@ bool inverse = true;
 int dim, x;
 
 // Variables pour batterie
-int nbbarresBatterieStatus = 0;
+int nbbarresBatterieStatus = -1;
 
 // Variables affichant les valeurs reçues depuis le MaxPV!
 String PV, CU, CO, TEMPCU;            // Consos et températures.
@@ -344,13 +344,18 @@ void setup() {
 ///////////////////////////////////////////////////////////////////////////////////////
 void loop() {
 
-  // Etat batterie
-  volt = (analogRead(4) * 2 * 3.3 * 1000) / 4096;
-  //Serial.println("Tension batterie : " + String(volt));
-
-  // Lit heure toutes les secondes
+  // Lit l'heure et l'état de la batterie toutes les secondes
   if (lastTime + 1000 < millis()) {
     GetTimeDate();
+
+    // Etat batterie
+    if (lipo) {
+      // Sur ESP32, la lecture analogique est sur 12 bits donc retourne une valeur entre 0-4095. Voltage de 3,3V.
+      //volt = (analogRead(4) * 2 * 3.3 * 1000) / 4096;
+      volt = (analogRead(4) * 3.3 * 1000) / 4096; // en mV
+      //Serial.println("AnalogRead : " + String(analogRead(4)) + " => Tension batterie : " + String(volt));
+    }
+    
     lastTime = millis();
   }
 
@@ -470,7 +475,7 @@ void RecuperationDonneesJoursTempo() {
   restantsBleus =  String(couleurParamBLEU); 
   restantsBlancs = String(couleurParamBLANC);
   restantsRouges = String(couleurParamROUGE); 
-  Serial.println("TEMPO Jours restants => Bleu : " + restantsBleus+ " Blancs : " + restantsBlancs+ " Rouges : " + restantsRouges);
+  Serial.println("TEMPO Jours restants => Bleu : " + restantsBleus+ " / Blancs : " + restantsBlancs+ " / Rouges : " + restantsRouges);
 
   esp_task_wdt_reset();
 }
@@ -557,26 +562,29 @@ void AfficheEcranPrincipal() {
     else if (nbbarresBatterieStatus == 1) selectedColor = TFT_ORANGE;
     else if (nbbarresBatterieStatus <= 0) selectedColor = TFT_RED;
 
+    // Réinitialisation du fond de la batterie
+    batterie.fillRect(0, 0, 15, 30, TFT_BLACK);
+ 
     // Contour de la pile
     batterie.drawRect(3, 1, 9, 5, TFT_LIGHTGREY);            // Haut
     batterie.drawRoundRect(0, 5, 15, 25, 2, TFT_LIGHTGREY);  // Bas
-    batterie.drawLine(4, 5, 11, 5, TFT_BLACK);               // Suppression trait de jonction haut/bas
+    batterie.drawLine(4, 5, 11, 5, TFT_BLACK);               // Suppression trait de jonction des carrés haut et bas
 
     // Colorisation des barres de la pile
     if (nbbarresBatterieStatus >= 3) {
       // Section haute
-      batterie.fillRect(5, 3, 5, 4, selectedColor);   // Partie haute
-      batterie.fillRect(2, 7, 11, 5, selectedColor);  // Partie basse
+      batterie.fillRect(5, 3, 5, 4, selectedColor);   // Partie haute de la section haute
+      batterie.fillRect(2, 7, 11, 5, selectedColor);  // Partie basse de la section hauter
     }
     if (nbbarresBatterieStatus >= 2) {
       // Section moyenne
-      batterie.fillRect(2, 13, 11, 7, selectedColor);  // Partie basse
+      batterie.fillRect(2, 13, 11, 7, selectedColor);
     }
     if (nbbarresBatterieStatus >= 1) {
       // Section basse
-      batterie.fillRect(2, 21, 11, 7, selectedColor);  // Partie basse
+      batterie.fillRect(2, 21, 11, 7, selectedColor);
     }
-    if (nbbarresBatterieStatus <= 0) {
+    if (nbbarresBatterieStatus == 0) {
       // On créé un intérieur complet sans séparateur de segments
       batterie.fillRoundRect(5, 3, 5, 8, 1, selectedColor);    // Partie haute
       batterie.fillRoundRect(2, 7, 11, 21, 1, selectedColor);  // Partie basse
@@ -704,8 +712,8 @@ suite:
   if (affichageEcranTempo) {
     //sprite.fillRoundRect(2, 116, 15, 51, RECT_RADIUS, colorTempoJJ);
     //sprite.fillRoundRect(19, 116, 5, 51, RECT_RADIUS, colorTempoJJ1);
-    sprite.fillRoundRect(4, 124, 20, 20, RECT_RADIUS, colorTempoJJ);
-    sprite.fillRoundRect(4, 146, 20, 20, RECT_RADIUS, colorTempoJJ1);
+    sprite.fillRoundRect(4, 120, 20, 20, RECT_RADIUS, colorTempoJJ);
+    sprite.fillRoundRect(4, 144, 20, 20, RECT_RADIUS, colorTempoJJ1);
   }
 
 
@@ -1000,7 +1008,8 @@ void  AfficheEcranJoursTempo() {
   // Titre
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_WHITE);
-  sprite.drawString("JOURS TEMPO RESTANTS", 160, 15, 2);
+  sprite.drawString("JOURS TEMPO RESTANTS", 123, 15, 2);
+  sprite.drawString("Couleurs", 283, 15, 2);
 
   // Barres pour chaque couleur des jours TEMPO (Y=34 à 134)
   hauteurBarre = 134 * nbJoursBleusRestants / nbJoursBleusMax;
@@ -1022,15 +1031,13 @@ void  AfficheEcranJoursTempo() {
   
   
   // Affichage couleur du jour J et jour J+1. Si indéfini => gris
-  // Cercle pour J+1
-  sprite.setTextColor(TFT_BLACK);
-  sprite.fillSmoothCircle(282, 140, 20, colorTempoJJ1);
-  sprite.drawString("+1", 282, 142, 4); 
-  // Cercle pour J
-  sprite.setTextColor(TFT_BLACK);
-  sprite.fillSmoothCircle(282, 80, 30, colorTempoJJ);
-  //sprite.drawString("J", 282, 80, 4); 
-  sprite.drawString(String(dateNow), 282, 80, 2);
+  // Carré pour J
+  sprite.setTextColor(TFT_WHITE);
+  sprite.drawString("Aujourd'hui", 283, 42, 2);
+  sprite.fillRoundRect(253, 51, 60, 60, RECT_RADIUS, colorTempoJJ);
+  // Carré pour J+1
+  sprite.drawString("Demain", 283, 120, 2);
+  sprite.fillRoundRect(263, 128, 40, 40, RECT_RADIUS, colorTempoJJ1);
 
   // Rafraichissement écran (indispensable après avoir tout dessiné)
   sprite.pushSprite(0, 0);
@@ -1377,12 +1384,12 @@ void AffichageSignalWifi() {
 ***************************************************************************************/
 void batterieStatus() {
 
-  // Voltage pour batterie, les chiffres sont à modifier suivant votre batterie
-  if      (volt < 2.5) nbbarresBatterieStatus = 0;
-  else if (volt < 3)   nbbarresBatterieStatus = 1;
-  else if (volt < 3.5) nbbarresBatterieStatus = 2;
-  else if (volt < 4)   nbbarresBatterieStatus = 3;
-  else                 nbbarresBatterieStatus = 3;
+  // Voltage pour batterie, les chiffres sont des mV à modifier suivant votre batterie
+  if      (volt < 2000) nbbarresBatterieStatus = 0;
+  else if (volt < 2500) nbbarresBatterieStatus = 1;
+  else if (volt < 3000) nbbarresBatterieStatus = 2;
+  else if (volt < 3300) nbbarresBatterieStatus = 3;
+  else                  nbbarresBatterieStatus = 3;
 }
 
 
