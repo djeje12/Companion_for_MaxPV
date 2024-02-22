@@ -41,6 +41,12 @@ Repository de `MaxPV!` :  https://github.com/Jetblack31/MaxPV
 
 
 # Installation
+## Pré-requis sur la version de MaxPV!
+Vérifiez que vous possédez au moins la version 3.60 de MaxPV!, car le Companion est compatible à partir de cette version.
+
+En effet, une modification de l'API de MaxPV! sur la version 3.60 est incompatible avec la précédente version 3.57.
+Si vous ne faites pas la mise à jour : l'écran des index journaliers sera inutilisable, ainsi que la température de la sonde de MaxPV.
+
 ## Plateforme Arduino IDE
 Pour l'installation de la plateforme, se référer au manuel `Installation.pdf` disponible à l'adresse https://github.com/JJHontebeyrie/Companion/blob/main/Installation.pdf (utiliser le bouton "Download" si le document ne s'affiche pas directement).
 
@@ -187,6 +193,11 @@ En avril 2023, le tout était vendu à 22€.
 ![Alt text](images/lilygo.png)
 
 # Versions
+
+## Version 1.1 (22/02/2024)
+- Correction index journaliers suite à modifications de l'API dans MaxPV 3.60,
+- Prise en compte de la température fournie par MaxPV 3.60 (avec possibilté de garder la température via une autre sonde comme auparavant)
+
 
 ## Version 1.0 (27/10/2023)
 - Ajout double clic sur bouton droit pour revenir à l'écran principal,

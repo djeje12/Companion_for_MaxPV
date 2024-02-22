@@ -1,7 +1,7 @@
 //**********************************************************************************************************
 // COMPANION pour MaxPV!                                                                                  **/
 //
-String Version = "1.0";
+String Version = "1.1";
 //                                                                                                        **
 /***********************************************************************************************************
 ** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie **
@@ -44,7 +44,7 @@ String Version = "1.0";
 #define WDT_TIMEOUT 20     // Délai d'activation du timeout du watchdog en secondes
 
 #define MAXPV_DELAI_MAJ       10  // Intervalle en s de rafraichissement des données de MaxPV!
-#define MAXPV_DATA_API_SIZE   28  // Nombre d'éléments retournés par l'API de MaxPV! "/api/get?alldata"
+#define MAXPV_DATA_API_SIZE   29  // Nombre d'éléments retournés par l'API de MaxPV! "/api/get?alldata"
 #define MAXPV_PARAM_API_SIZE  16  // Nombre d'éléments retournés par l'API de MaxPV! "/api/get?allparam"
 
 #define ECRAN_DEMARRAGE         0 // Déclaré, mais pas géré
@@ -128,7 +128,7 @@ WiFiClient client;
 String dataString = "";
 String dataMaxPV = "";                       // Données restituées par l'API MaxPV (compteurs)
 String paramMaxPV = "";                      // Données restituées par l'API MaxPV (paramètres)
-String dataTemperature = "";                 // Données restituées par l'API externe de température
+String dataTemperature = "";                 // Données restituées par l'API externe de température (hors MaxPV)
 String MsgDataSplit[MAXPV_DATA_API_SIZE];    // Valeurs à récupérer depuis l'api
 String MsgParamSplit[MAXPV_PARAM_API_SIZE];  // Valeurs à récupérer depuis l'api
 
@@ -862,28 +862,33 @@ void decrypte() {
   Serial.println("Données MaxPV! reçues : '" + dataMaxPV + "'");
   // paramMaxPV : chaine avec toutes les valeurs recherchées
   if (!puissancePV or !puissanceCumulus) Serial.println("Paramètres MaxPV! reçus : '" + paramMaxPV + "'");
-  // dataTemperature : chaine contenant une seule valeur (à améliorer pour gérer plusieurs valeurs)
-  if (sonde) Serial.println("Donnée température reçue : " + dataTemperature);
+  // dataTemperature : chaine contenant une seule valeur de température (à améliorer pour gérer plusieurs valeurs). Utilisé uniquement dans le cas où l'on utilise un serveur de température hors MaxPV
+  if (sonde && !sondeMaxPV) Serial.println("Donnée température reçue : " + dataTemperature);
 
   // Mise en variables des données MaxPV!, MsgDataSplit[0 à MAXPV_DATA_API_SIZE-1]
   split(MsgDataSplit, MAXPV_DATA_API_SIZE, dataMaxPV, ',');
-  // Affichage des données de l'API MaxPV! dans le Moniteur Série
+  // DEBUG - Affichage des données de l'API MaxPV! dans le Moniteur Série
   //for(int j = 0;j<MAXPV_DATA_API_SIZE;j++) {Serial.print("Données API : "); Serial.print (j); Serial.println(" = " + MsgDataSplit[j]);}
 
   // Mise en variables des paramètres MaxPV!, MsgParamSplit[0 à MAXPV_PARAM_API_SIZE-1]
   split(MsgParamSplit, MAXPV_PARAM_API_SIZE, paramMaxPV, ',');
-  // Affichage des données de l'API MaxPV! dans le Moniteur Série
+  // DEBUG - Affichage des données de l'API MaxPV! dans le Moniteur Série
   //for(int j = 0;j<MAXPV_PARAM_API_SIZE;j++) {Serial.print("Données API : "); Serial.print (j); Serial.println(" = " + MsgParamSplit[j]);}
 
   // Mise en variable de la température
   // Si les données reçues sont structurées, on recherche la température d'après les balises de fin et de début
   // Exemple : Shelly 1P retourne une chaine du type : {"id": 100,"tC":21.9, "tF":71.5}
-  if (baliseDebut.length() > 0 and baliseFin.length() > 0) {
-    int startValue = dataTemperature.indexOf(baliseDebut);
-    int endValue   = dataTemperature.indexOf(baliseFin,startValue+1);
-    TEMPCU = dataTemperature.substring(startValue + baliseDebut.length(), endValue);
+  // Si on utilise la sonde MaxPV, alors on récupère la température depuis les "Data" MaxPV
+  if (sondeMaxPV) {
+    TEMPCU = MsgDataSplit[23];
   } else {
-    TEMPCU = dataTemperature;  // Sonde température cumulus
+    if (baliseDebut.length() > 0 and baliseFin.length() > 0) {
+      int startValue = dataTemperature.indexOf(baliseDebut);
+      int endValue   = dataTemperature.indexOf(baliseFin,startValue+1);
+      TEMPCU = dataTemperature.substring(startValue + baliseDebut.length(), endValue);
+    } else {
+      TEMPCU = dataTemperature;  // Sonde température cumulus
+    }
   }
 
 
@@ -924,10 +929,10 @@ void decrypte() {
   /***********************************************
   **             MODIFICATION DES CUMULS
   ************************************************/
-  CUMCO = String(MsgDataSplit[9].toFloat() - MsgDataSplit[24].toFloat());    // Cumul Consommation réseau journalière (kWh) - indeximportJ
-  CUMINJ = String(MsgDataSplit[10].toFloat() - MsgDataSplit[25].toFloat());  // Cumul Injection journalière (kWh) - indexexportJ
-  CUMPV = String(MsgDataSplit[11].toFloat() - MsgDataSplit[26].toFloat());   // Cumul Production solaire (kWh) - indeximpulsionJ
-  CUMBAL = String(MsgDataSplit[8].toFloat() - MsgDataSplit[23].toFloat());   // Cumul routage vers ballon cumulus (kWh) - indexroutedJ
+  CUMCO = String(MsgDataSplit[9].toFloat() - MsgDataSplit[25].toFloat());    // Cumul Consommation réseau journalière (kWh) - indeximportJ
+  CUMINJ = String(MsgDataSplit[10].toFloat() - MsgDataSplit[26].toFloat());  // Cumul Injection journalière (kWh) - indexexportJ
+  CUMPV = String(MsgDataSplit[11].toFloat() - MsgDataSplit[27].toFloat());   // Cumul Production solaire (kWh) - indeximpulsionJ
+  CUMBAL = String(MsgDataSplit[8].toFloat() - MsgDataSplit[24].toFloat());   // Cumul routage vers ballon cumulus (kWh) - indexroutedJ
   /*Serial.println("Compteurs journaliers : ");
   Serial.println(" - Conso : " + CUMCO);
   Serial.println(" - Injection : " + CUMINJ);
@@ -1358,7 +1363,7 @@ void getArrivals() {
   /*****************************************************
    * Etape 3 : récupération des données de température *
    *****************************************************/
-  if (sonde) {
+  if (sonde && !sondeMaxPV) {
     // Use WiFiClient class to create TLS connection
     Serial.println("\nE3 : Initialisation de la connexion au serveur température...");
     // Connexion au serveur web
@@ -1388,7 +1393,7 @@ void getArrivals() {
       String line = client.readStringUntil('\n');
       dataString = line;  // Mise en mémoire de la chaine de données reçues de l'API de température
     }
-    dataTemperature = dataString;  // Sauvegarde des données reçues de MaxPV!
+    dataTemperature = dataString;  // Sauvegarde des données reçues du serveur de température
 
     Serial.println("E3 : Requête traitée avec succès!");
     client.stop();
