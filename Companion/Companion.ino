@@ -1,7 +1,7 @@
 //**********************************************************************************************************
 // COMPANION pour MaxPV!                                                                                  **/
 //
-String Version = "1.1beta";
+String Version = "1.1";
 //                                                                                                        **
 /***********************************************************************************************************
 ** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie **
