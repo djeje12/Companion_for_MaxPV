@@ -208,7 +208,8 @@ En avril 2023, le tout était vendu à 22€.
 # Versions
 
 ## Version 1.2 (20/02/2024)
-- Ajout écran affichage des jours EDF TEMPO (activation paramétrable).
+- Ajout écran affichage des jours EDF TEMPO (activation paramétrable),
+- Amélioration de la gestion de la batterie.
 
 
 ## Version 1.1 (19/02/2024)

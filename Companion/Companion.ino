@@ -121,6 +121,10 @@ int nbbarresBatterieStatus = -1;
 uint32_t tensionBatterie;  // Voltage batterie en mV
 #define PIN_POWER_ON 15
 #define PIN_BAT_VOLT 4
+#define MIN_CHARG_USB 4300 // Tension mV minimum à partir de laquelle on considère que la batterie est en cours de charge (ie : port USB branché)
+#define BAT_VAL_MAX 4000   // Tension de la batterie en charge max. En mV.
+#define BAT_VAL_MIN 2700   // Tension de la batterie en charge min. En mV.
+uint32_t pourcentageBatterie; // Charge en pourcentage de la batterie
 
 // Variables affichant les valeurs reçues depuis le MaxPV!
 String PV, CU, CO, TEMPCU;            // Consos et températures.
@@ -390,7 +394,7 @@ void loop() {
           AfficheDebugTFT ("U: " + String(tensionBatterie) + "mV");
       }*/
       // Message débug pour afficher tension de la batterie
-      AfficheDebugTFT (String(tensionBatterie) + "mV");
+      AfficheDebugTFT (String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
     }
     
     lastTime = millis();
@@ -1422,11 +1426,15 @@ void AffichageSignalWifi() {
 void batterieStatus() {
 
   // Tension pour la batterie (en mV)
-  if      (tensionBatterie < 2500) nbbarresBatterieStatus = 0;
-  else if (tensionBatterie < 3000) nbbarresBatterieStatus = 1;
+  if      (tensionBatterie < 2900) nbbarresBatterieStatus = 0;
+  else if (tensionBatterie < 3300) nbbarresBatterieStatus = 1;
   else if (tensionBatterie < 3500) nbbarresBatterieStatus = 2;
   else if (tensionBatterie < 4000) nbbarresBatterieStatus = 3;
   else                             nbbarresBatterieStatus = 3;
+
+  // BAT_VAL_MAX : 4000mv => charge 100% (estimation)
+  // BAT_VAL_MIN : 2700mv => charge 0% (estimation)
+  pourcentageBatterie = (tensionBatterie - BAT_VAL_MIN) * 100 / (BAT_VAL_MAX - BAT_VAL_MIN);
 }
 
 
