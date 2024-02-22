@@ -207,14 +207,14 @@ En avril 2023, le tout était vendu à 22€.
 
 # Versions
 
-## Version 1.2 (20/02/2024)
+## Version 1.2 (23/02/2024)
 - Ajout écran affichage des jours EDF TEMPO (activation paramétrable),
 - Amélioration de la gestion de la batterie.
 
 
-## Version 1.1 (19/02/2024)
+## Version 1.1 (22/02/2024)
 - Correction index journaliers suite à modifications de l'API dans MaxPV 3.60,
-- Ajout prise en compte de la température fournie par MaxPV 3.60.
+- Prise en compte de la température fournie par MaxPV 3.60 (avec possibilté de garder la température via une autre sonde comme auparavant)
 
 
 ## Version 1.0 (27/10/2023)
