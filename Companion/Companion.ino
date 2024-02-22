@@ -124,7 +124,7 @@ uint32_t tensionBatterie;  // Voltage batterie en mV
 #define MIN_CHARG_USB 4300 // Tension mV minimum à partir de laquelle on considère que la batterie est en cours de charge (ie : port USB branché)
 #define BAT_VAL_MAX 4000   // Tension de la batterie en charge max. En mV.
 #define BAT_VAL_MIN 2700   // Tension de la batterie en charge min. En mV.
-uint32_t pourcentageBatterie; // Charge en pourcentage de la batterie
+int32_t pourcentageBatterie; // Charge en pourcentage de la batterie
 
 // Variables affichant les valeurs reçues depuis le MaxPV!
 String PV, CU, CO, TEMPCU;            // Consos et températures.
@@ -1435,6 +1435,7 @@ void batterieStatus() {
   // BAT_VAL_MAX : 4000mv => charge 100% (estimation)
   // BAT_VAL_MIN : 2700mv => charge 0% (estimation)
   pourcentageBatterie = (tensionBatterie - BAT_VAL_MIN) * 100 / (BAT_VAL_MAX - BAT_VAL_MIN);
+  if (pourcentageBatterie < 0) pourcentageBatterie = 0; // Pour le cas où l'arduino resterait alumé même si la batterie est en dessous du seuil "mini"
 }
 
 
