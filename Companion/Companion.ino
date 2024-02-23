@@ -44,7 +44,7 @@ String Version = "1.2beta";
 #include <esp_task_wdt.h>  // Watchdog en cas de déconnexion
 #define WDT_TIMEOUT 20     // Délai d'activation du timeout du watchdog en secondes
 
-#define MAXPV_DELAI_MAJ       10  // Intervalle en s de rafraichissement des données de MaxPV!
+#define MAXPV_DELAI_MAJ_SECS  10  // Intervalle en s de rafraichissement des données de MaxPV!
 #define MAXPV_DATA_API_SIZE   29  // Nombre d'éléments retournés par l'API de MaxPV! "/api/get?alldata"
 #define MAXPV_PARAM_API_SIZE  16  // Nombre d'éléments retournés par l'API de MaxPV! "/api/get?allparam"
 
@@ -73,7 +73,7 @@ TFT_eSprite luminosite = TFT_eSprite(&lcd);  // Sprite réglage luminosité
 // Couleurs bargraph
 #define color0 0x10A2  // Gris foncé
 // Couleurs pour affichage valeurs cumuls et légende
-// Couleur Température cumulus
+// Couleur Température ECS
 #define color8 0x16DA  // Bleu clair
 
 // Rayon d'arrondi des rectangles
@@ -85,8 +85,8 @@ char pathData[] = "/api/get?alldata";
 char pathParam[] = "/api/get?allparam";
 
 // Variables pour programme
-int puissancePV = 0;      // Production max en watt. Alimenté automatiquement à partir de P_INSTALLPV dans MaxPV!
-int puissanceCumulus = 0; // puissance cumulus en watt. Alimenté automatiquement à  partir de P_RESISTANCE dans MaxPV!
+int puissancePV = 0;  // Production max en watt. Alimenté automatiquement à partir de P_INSTALLPV dans MaxPV!
+int puissanceECS = 0; // Puissance ECS en watt. Alimenté automatiquement à  partir de P_RESISTANCE dans MaxPV!
 
 long lastTime = 0;
 long lastUpdateMaxPV = 0;
@@ -117,14 +117,11 @@ bool inverse = true;
 int dim, x;
 
 // Variables pour batterie
-int nbbarresBatterieStatus = -1;
-long tensionBatterie;     // Voltage batterie en mV
-long pourcentageBatterie; // Charge en pourcentage de la batterie
+long tensionBatterie;           // Voltage batterie en mV
+long pourcentageBatterie = 100; // Charge en pourcentage de la batterie (100% à l'initialisation)
 #define PIN_POWER_ON 15
 #define PIN_BAT_VOLT 4
-#define MIN_CHARG_USB 4300 // Tension mV minimum à partir de laquelle on considère que la batterie est en cours de charge (ie : port USB branché)
-#define BAT_VAL_MAX 4000   // Tension de la batterie en charge max. En mV.
-#define BAT_VAL_MIN 2700   // Tension de la batterie en charge min. En mV.
+#define MIN_CHARG_USB 4300      // Tension mV minimum à partir de laquelle on considère que la batterie est en cours de charge (ie : port USB branché)
 
 
 // Variables affichant les valeurs reçues depuis le MaxPV!
@@ -170,7 +167,7 @@ const long timeoutTime = 5000;
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 long lastUpdateTempo = 0;
-const int UPDATE_INTERVALLE_TEMPO = 60 * 60UL; // Soit 3600s (1h)
+const int UPDATE_INTERVALLE_TEMPO_SECS  = 60 * 60UL; // Soit 3600s (1h)
 String restantsBleus, restantsBlancs, restantsRouges, JourJJ, JourJJ1;
 uint32_t colorTempoJJ  = TFT_LIGHTGREY;
 uint32_t colorTempoJJ1 = TFT_LIGHTGREY;
@@ -185,7 +182,7 @@ float wh_to_kwh(float wh) {return wh / 1000.0;}
 ///////////////////////////////////////////////////////////////////////////////////////
 void setup() {
 
-  // Activation du port batterie interne pour LilyGo S3(cf https://github.com/Xinyuan-LilyGO/T-Display-S3?tab=readme-ov-file#9%EF%B8%8F%E2%83%A3-faq)
+  // Activation du port batterie interne pour LilyGo S3(cf. https://github.com/Xinyuan-LilyGO/T-Display-S3?tab=readme-ov-file#9%EF%B8%8F%E2%83%A3-faq)
   if (lipo) {
     // This IO15 must be set to HIGH, otherwise nothing will be displayed when USB is not connected.
     pinMode(PIN_POWER_ON, OUTPUT);
@@ -360,57 +357,22 @@ void loop() {
     GetTimeDate();
 
     // Etat batterie
-    if (lipo) {
-      // Documentation :
-      // https://github.com/Xinyuan-LilyGO/T-Display-S3
-      // https://github.com/Xinyuan-LilyGO/T-Display-S3/blob/main/examples/GetBatteryVoltage/GetBatteryVoltage.ino
-      // https://docs.espressif.com/projects/esp-idf/en/release-v3.3/api-reference/peripherals/adc.html
-      // https://github.com/Xinyuan-LilyGO/TTGO-T-Display/blob/master/TFT_eSPI/examples/FactoryTest/FactoryTest.ino
-      esp_adc_cal_characteristics_t adc_chars;
-
-      // Get the internal calibration value of the chip
-      // "1100" is actually 1.1V in mV. 1.1V is the internal reference voltage that readings get compared to.
-      esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
-      uint32_t raw = analogRead(PIN_BAT_VOLT);
-      tensionBatterie = esp_adc_cal_raw_to_voltage(raw, &adc_chars) * 2; //The partial pressure is one-half
-
-      // Bizarre, car ce calcul semblerait plus juste quand on compare avec un Voltmètre. Bon, dans certains cas juste...
-      //float battery_voltage = ((float)raw / 4095.0) * 2.0 * 3.3 * 1100;
-
-      // cf. : https://github.com/Xinyuan-LilyGO/TTGO-T-Display/blob/master/TFT_eSPI/examples/FactoryTest/FactoryTest.ino
-      /*if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
-          Serial.printf("eFuse Vref:%u mV", adc_chars.vref);
-          vref = adc_chars.vref;
-      } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
-          Serial.printf("Two Point --> coeff_a:%umV coeff_b:%umV\n", adc_chars.coeff_a, adc_chars.coeff_b);
-      } else {
-          Serial.println("Default Vref: 1100mV");
-      }*/
-
-      // If the battery is not connected, the ADC detects the charging voltage of TP4056, which is inaccurate.
-      // Can judge whether it is greater than 4300mV. If it is less than this value, it means the battery exists.
-      /*if (tensionBatterie > 4300) {
-          AfficheDebugTFT ("No battery! U:" + String(tensionBatterie) + "mV");
-      } else {
-          AfficheDebugTFT ("U: " + String(tensionBatterie) + "mV");
-      }*/
-      // Message débug pour afficher tension de la batterie
-      AfficheDebugTFT (String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
-    }
+    if (lipo)
+      GetBatteryVoltage();
     
     lastTime = millis();
   }
 
   // Données météo
   // Test pour voir si un rafraissement est nécessaire
-  if (booted || (millis() - lastDownloadUpdateWeather > 1000UL * UPDATE_WEATHER_INTERVAL_SECS)) { // 15 min convertis en ms
+  if (booted || (lastDownloadUpdateWeather + UPDATE_WEATHER_INTERVAL_SECS * 1000UL < millis())) { // 15 min convertis en ms
     RecuperationDonneesMeteo();
     lastDownloadUpdateWeather = millis();
   }
 
   // Données EDF jours TEMPO
   if (affichageEcranTempo)
-    if (booted || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO * 1000UL < millis())) {
+    if (booted || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO_SECS  * 1000UL < millis())) {
       RecuperationDonneesJoursTempo();
       lastUpdateTempo = millis();
     }
@@ -427,7 +389,7 @@ void loop() {
   }
 
   // Relance de lecture des données (10 sec)
-  if (lastUpdateMaxPV + MAXPV_DELAI_MAJ * 1000 < millis()) {
+  if (lastUpdateMaxPV + MAXPV_DELAI_MAJ_SECS * 1000UL < millis()) {
     Serial.println("Rafraichissement des données...");
     resetCycle();
     lastUpdateMaxPV = millis();
@@ -597,48 +559,6 @@ void AfficheEcranPrincipal() {
   // Panneau de droite sur l'écran : heure, date, batterie
   sprite.drawRoundRect(234,  0, 86, 54, RECT_RADIUS, TFT_LIGHTGREY);
 
-  if (lipo) {
-
-    // Détermination de la couleur des barres de la pile
-    if      (nbbarresBatterieStatus >= 2) selectedColor = TFT_GREEN;
-    else if (nbbarresBatterieStatus == 1) selectedColor = TFT_ORANGE;
-    else if (nbbarresBatterieStatus <= 0) selectedColor = TFT_RED;
-
-    // Réinitialisation du fond de la batterie
-    batterie.fillRect(0, 0, 15, 30, TFT_BLACK);
- 
-    // Contour de la pile
-    batterie.drawRect(3, 1, 9, 5, TFT_LIGHTGREY);            // Haut
-    batterie.drawRoundRect(0, 5, 15, 25, 2, TFT_LIGHTGREY);  // Bas
-    batterie.drawLine(4, 5, 11, 5, TFT_BLACK);               // Suppression trait de jonction des carrés haut et bas
-
-    // Colorisation des barres de la pile
-    if (nbbarresBatterieStatus >= 3) {
-      // Section haute
-      batterie.fillRect(5, 3, 5, 4, selectedColor);   // Partie haute de la section haute
-      batterie.fillRect(2, 7, 11, 5, selectedColor);  // Partie basse de la section hauter
-    }
-    if (nbbarresBatterieStatus >= 2) {
-      // Section moyenne
-      batterie.fillRect(2, 13, 11, 7, selectedColor);
-    }
-    if (nbbarresBatterieStatus >= 1) {
-      // Section basse
-      batterie.fillRect(2, 21, 11, 7, selectedColor);
-    }
-    if (nbbarresBatterieStatus == 0) {
-      // On créé un intérieur complet sans séparateur de segments
-      batterie.fillRoundRect(5, 3, 5, 8, 1, selectedColor);    // Partie haute
-      batterie.fillRoundRect(2, 7, 11, 21, 1, selectedColor);  // Partie basse
-      // On affiche un "!" d'avertissement
-      batterie.setTextDatum(MC_DATUM); // centre milieu
-      batterie.setTextColor(TFT_BLACK);
-      batterie.drawString("!", 7, 18, 4);
-    }
-
-    batterie.pushToSprite(&sprite, 303, 92, TFT_BLACK);
-  }
-
   // Affichage Météo
   meteo.pushImage(0,0,50,50,unknown);
   if  (icone == "01d")                      {meteo.pushImage(0,0,50,50,clear_day);            goto suite;}
@@ -686,10 +606,11 @@ suite:
   AffichageSignalWifi();
 
   // Gestion batterie
-  if (lipo) batterieStatus();
+  if (lipo) 
+    AffichageIndicateurBatterie();
 
-  // Affichage de la température du cumulus si sonde de température présente
-  if (sondeTemperature) {
+  // Affichage de la température de l'ECS si sonde de température présente
+  if (sondeTemperatureECS) {
 
     // Pour afficher le cercle de température coloré en fonction de la valeur de la température
     selectedColor = TFT_CYAN;
@@ -717,7 +638,7 @@ suite:
   //
   // Affichage des valeurs des compteurs
   //
-  sprite.setFreeFont(&Orbitron_Light_24);  // police d'affichage "Orbitron_Light_24", liste des caractères disponibles https://github.com/Bodmer/TFT_eSPI/blob/master/Fonts/Custom/Orbitron_Light_24.h
+  sprite.setFreeFont(&Orbitron_Light_24);  // Police d'affichage "Orbitron_Light_24", liste des caractères disponibles https://github.com/Bodmer/TFT_eSPI/blob/master/Fonts/Custom/Orbitron_Light_24.h
 
   // Affichage valeur production PV
   if (PV.toInt() > 0)  {
@@ -793,7 +714,7 @@ suite:
     }
   }
 
-  // Appel routine affichage des graphes latéraux
+  // Appel routine affichage des bargraphes latéraux
   Indicateurs_Graphiques();
 
   // Rafraichissement de tout l'écran
@@ -1096,9 +1017,9 @@ void FormatageDonnesMaxPV() {
   // dataMaxPV : chaine avec toutes les valeurs recherchées
   Serial.println("Données MaxPV! reçues : '" + dataMaxPV + "'");
   // paramMaxPV : chaine avec toutes les valeurs recherchées
-  if (!puissancePV or !puissanceCumulus) Serial.println("Paramètres MaxPV! reçus : '" + paramMaxPV + "'");
+  if (!puissancePV or !puissanceECS) Serial.println("Paramètres MaxPV! reçus : '" + paramMaxPV + "'");
   // dataTemperature : chaine contenant une seule valeur de température (à améliorer pour gérer plusieurs valeurs). Utilisé uniquement dans le cas où l'on utilise un serveur de température hors MaxPV
-  if (sondeTemperature && !sondeTemperatureMaxPV) Serial.println("Donnée température reçue : " + dataTemperature);
+  if (sondeTemperatureECS && !sondeTemperatureECSMaxPV) Serial.println("Donnée température reçue : " + dataTemperature);
 
   // Mise en variables des données MaxPV!, MsgDataSplit[0 à MAXPV_DATA_API_SIZE-1]
   split(MsgDataSplit, MAXPV_DATA_API_SIZE, dataMaxPV, ',');
@@ -1114,7 +1035,7 @@ void FormatageDonnesMaxPV() {
   // Si les données reçues sont structurées, on recherche la température d'après les balises de fin et de début
   // Exemple : Shelly 1P retourne une chaine du type : {"id": 100,"tC":21.9, "tF":71.5}
   // Si on utilise la sonde de température de MaxPV, alors on récupère la température depuis les "Data" MaxPV
-  if (sondeTemperatureMaxPV) {
+  if (sondeTemperatureECSMaxPV) {
     TEMPCU = MsgDataSplit[23];
   } else {
     if (baliseDebut.length() > 0 and baliseFin.length() > 0) {
@@ -1122,7 +1043,7 @@ void FormatageDonnesMaxPV() {
       int endValue   = dataTemperature.indexOf(baliseFin,startValue+1);
       TEMPCU = dataTemperature.substring(startValue + baliseDebut.length(), endValue);
     } else {
-      TEMPCU = dataTemperature;  // Sonde de température cumulus
+      TEMPCU = dataTemperature;  // Sonde de température ECS
     }
   }
 
@@ -1146,7 +1067,7 @@ void FormatageDonnesMaxPV() {
   Serial.println(" - Conso : " + CO);
   Serial.println(" - Production PV : " + PV);
   Serial.println(" - Routage : " + CU);
-  if (sondeTemperature) Serial.println(" - Température : " + TEMPCU);*/
+  if (sondeTemperatureECS) Serial.println(" - Température : " + TEMPCU);*/
 
   // Formatage des valeurs pour affichage sur l'écran
   PV = String(PV.toInt());  // (avec prod en + ou en -)
@@ -1167,7 +1088,7 @@ void FormatageDonnesMaxPV() {
   CUMCO = String(MsgDataSplit[9].toFloat() - MsgDataSplit[25].toFloat());    // Cumul Consommation réseau journalière (kWh) - indeximportJ
   CUMINJ = String(MsgDataSplit[10].toFloat() - MsgDataSplit[26].toFloat());  // Cumul Injection journalière (kWh) - indexexportJ
   CUMPV = String(MsgDataSplit[11].toFloat() - MsgDataSplit[27].toFloat());   // Cumul Production solaire (kWh) - indeximpulsionJ
-  CUMBAL = String(MsgDataSplit[8].toFloat() - MsgDataSplit[24].toFloat());   // Cumul routage vers ballon cumulus (kWh) - indexroutedJ
+  CUMBAL = String(MsgDataSplit[8].toFloat() - MsgDataSplit[24].toFloat());   // Cumul routage vers ballon ECS (kWh) - indexroutedJ
   /*Serial.println("Compteurs journaliers : ");
   Serial.println(" - Conso : " + CUMCO);
   Serial.println(" - Injection : " + CUMINJ);
@@ -1186,12 +1107,12 @@ void FormatageDonnesMaxPV() {
   /***********************************************
   **          MODIFICATION DES PARAMETRES       **
   ************************************************/
-  if (!puissancePV or !puissanceCumulus) {          // Réalisé une seule fois, car les paramètres sont figés
+  if (!puissancePV or !puissanceECS) {          // Réalisé une seule fois, car les paramètres sont figés
     puissancePV      = MsgParamSplit[15].toInt();  // Puissance PV max en W - P_INSTALLPV
-    puissanceCumulus = MsgParamSplit[04].toInt();  // Puissance cumulus en W - P_RESISTANCE
+    puissanceECS = MsgParamSplit[04].toInt();  // Puissance ECS en W - P_RESISTANCE
     /*Serial.println("Paramètres : ");
     Serial.println(" - Puissance PV : " + String(puissancePV));
-    Serial.println(" - Puissance Cumulus : " + String(puissanceCumulus));*/
+    Serial.println(" - Puissance ECS : " + String(puissanceECS));*/
   }
 
   esp_task_wdt_reset();
@@ -1199,7 +1120,7 @@ void FormatageDonnesMaxPV() {
 
 
 /***************************************************************************************
-**                      Affichage des bargraphs verticaux
+**              Affichage des bargraphs verticaux sur l'écran principal
 ***************************************************************************************/
 void Indicateurs_Graphiques() {
   float valeur;
@@ -1248,11 +1169,11 @@ void Indicateurs_Graphiques() {
 
 
   //
-  // Routage vers Cumulus
+  // Routage vers ECS
   //
-  valeur = CU.toFloat();  //CU.toInt();  // Puissance routée vers cumulus
+  valeur = CU.toFloat();  //CU.toInt();  // Puissance routée vers ECS
 
-  ecart = puissanceCumulus / 9;      // Puissance correspondante pour chacune des 9 barres (par rapport à puissance max du cumulus)
+  ecart = puissanceECS / 9;      // Puissance correspondante pour chacune des 9 barres (par rapport à puissance max du ECS)
   nbbarres = round(valeur / ecart);  // Calcul nombre de barres à afficher en couleur (avec l'arrondi pour plus de précision)
   demie_barre = false;               // A true si on a déterminé qu'il fallait rajouter une demie-barre supérieure
 
@@ -1347,7 +1268,7 @@ void Indicateurs_Graphiques() {
 /***************************************************************************************
 **      Fait varier l'intensité d'éclairage de 50 à 250 dans un sens et l'inverse
 ***************************************************************************************/
-void AfficheEclairage() {
+void Affichage_Eclairage() {
   if (!inverse) {
     dim = dim - 50;
     if (dim <= 50) {dim = 50; inverse = true;}
@@ -1366,7 +1287,7 @@ void AfficheEclairage() {
   luminosite.fillRoundRect(0, 0, 200, 90, RECT_RADIUS, TFT_DARKGREY);
   luminosite.drawString("Luminosite " + String(dim * 2 / 5) + "%", 100, 15, 2);            // Affichage du % de dim par rapport au max de 250 (=> 2/5)
   x = dim / 50;                                                                            // steps de 50
-  for (int i = 0; i < x; i++) luminosite.fillRect(25 + (i * 30), 35, 25, 35, TFT_GOLD);    // La zone sélectionnée
+  for (int i = 0; i < x; i++)     luminosite.fillRect(25 + (i * 30), 35, 25, 35, TFT_GOLD);// La zone sélectionnée
   for (int i = 0 + x; i < 5; i++) luminosite.fillRect(25 + (i * 30), 35, 25, 35, color0);  // La zone non sélectionnée
   
   luminosite.pushToSprite(&sprite, 60, 40, TFT_BLACK);
@@ -1424,21 +1345,67 @@ void AffichageSignalWifi() {
 /***************************************************************************************
 **                            Gestion de la batterie
 ***************************************************************************************/
-void batterieStatus() {
+void AffichageIndicateurBatterie() {
 
-  // Tension pour la batterie (en mV)
-  if      (tensionBatterie < 2900) nbbarresBatterieStatus = 0;
-  else if (tensionBatterie < 3300) nbbarresBatterieStatus = 1;
-  else if (tensionBatterie < 3500) nbbarresBatterieStatus = 2;
-  else if (tensionBatterie < 4000) nbbarresBatterieStatus = 3;
-  else                             nbbarresBatterieStatus = 3;
+  uint32_t selectedColor;
 
-  // BAT_VAL_MAX : 4000mv => charge 100% (estimation)
-  // BAT_VAL_MIN : 2700mv => charge 0% (estimation)
+  // Calcul % de charge de la batterie
+  // BAT_VAL_MAX : 4000mv pour charge 100% (estimation)
+  // BAT_VAL_MIN : 2700mv pour charge 0% (estimation)
   pourcentageBatterie = (tensionBatterie - BAT_VAL_MIN) * 100 / (BAT_VAL_MAX - BAT_VAL_MIN);
-  if (pourcentageBatterie < 0) pourcentageBatterie = 0; // Pour le cas où l'arduino resterait allumé même si la batterie est en dessous du seuil "mini"
 
-  //AfficheDebugTFT (String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
+  // Pour le cas où l'arduino resterait allumé même si la batterie est en dessous du seuil "mini"
+  if (pourcentageBatterie < 0) pourcentageBatterie = 0;
+
+  // Calibrage batterie : à décommenter pour visualiser la tension courante de la batterie
+  //AfficheDebugTFT(String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
+
+
+  // Détermination de la couleur interne de la pile
+  if      (pourcentageBatterie < 15)   selectedColor = TFT_RED;
+  else if (pourcentageBatterie < 31 )  selectedColor = TFT_ORANGE;
+  else if (pourcentageBatterie < 110 ) selectedColor = TFT_GREEN;
+  // Batterie en charge : % > 110 quand USB branché (correspond à > 4300mV)
+  else                                 selectedColor = TFT_WHITE;
+  
+  // Réinitialisation du fond de la batterie
+  batterie.fillRect(0, 0, 15, 30, TFT_BLACK);
+
+  // Contour de la pile
+  batterie.drawRoundRect(0, 5, 15, 25, 1, TFT_LIGHTGREY);  // Bas de la pile
+  batterie.drawRect(3, 0, 9, 6, TFT_LIGHTGREY);            // Haut de la pile
+  batterie.drawLine(4, 5, 10, 5, TFT_BLACK);               // Suppression trait de jonction des carrés haut et bas
+
+  if (pourcentageBatterie > 100) pourcentageBatterie = 100; // Protection en cas de charge USB
+
+  // Contenu de la pile
+  //  26 lignes colorisables quand batterie à 100%
+  //    Partie fine (haute) : 5 lignes
+  //    Partie large (basse): 21 lignes
+  int nbrLignes = pourcentageBatterie * 26 / 100;
+
+  if (nbrLignes > 21 && nbrLignes <= 26 ) {
+    // Remplissage du haut de la batterie
+    batterie.fillRect(5, 7-(nbrLignes-21), 5, (nbrLignes-21), selectedColor);    // Partie haute
+    // Remplissage complet du bas de la batterie
+    nbrLignes = 21;
+  } 
+  if (nbrLignes <= 21 ) {
+    // Remplissage du bas de la batterie
+    batterie.fillRect(2, 28-nbrLignes, 11, nbrLignes, selectedColor);
+  } 
+  if (pourcentageBatterie < 10) {
+    // On affiche un "!" d'avertissement
+    batterie.setTextDatum(ML_DATUM);
+    batterie.setTextColor(TFT_RED);
+    batterie.drawString("!", 4, 18, 4);
+  }
+  /*// Affichage du % sur la batterie
+  batterie.setTextDatum(ML_DATUM);
+  batterie.setTextColor(TFT_BLACK);
+  batterie.drawString(String(pourcentageBatterie), 1, 15, 2);*/
+
+  batterie.pushToSprite(&sprite, 303, 92, TFT_BLACK);
 }
 
 
@@ -1567,7 +1534,7 @@ void RecuperationDonneesMaxPV() {
    * Etape 2 : récupération des paramètres de MaxPV    *
    *****************************************************/
   // Effectué une seule fois pour alimenter ces paramètres (ces paramètres sont fixes)
-  if (!puissancePV || !puissanceCumulus) {
+  if (!puissancePV || !puissanceECS) {
     Serial.print("E2 : Connexion à MaxPV! : ");
     Serial.print(serveurMaxPV + String(":") + portServeurMaxPV);
     Serial.println(pathParam);
@@ -1605,25 +1572,25 @@ void RecuperationDonneesMaxPV() {
   /*****************************************************
    * Etape 3 : récupération des données de température *
    *****************************************************/
-  if (sondeTemperature && !sondeTemperatureMaxPV) {
+  if (sondeTemperatureECS && !sondeTemperatureECSMaxPV) {
     // Use WiFiClient class to create TLS connection
     Serial.println("\nE3 : Initialisation de la connexion au serveur température...");
     // Connexion au serveur web
     Serial.print("E3 : Connexion à l'API température : ");
-    Serial.print(serveurTemperature + String(":") + portServeurTemperature);
-    Serial.println(pathTemperature);
+    Serial.print(serveurTemperatureECS + String(":") + portServeurTemperatureECS);
+    Serial.println(pathTemperatureECS);
 
-    if (!client.connect(serveurTemperature, portServeurTemperature)) {
+    if (!client.connect(serveurTemperatureECS, portServeurTemperatureECS)) {
       Serial.println("E3 : Connexion échouée!");
       return;
     }
 
     // Make a HTTP request:
     client.print("GET ");
-    client.print(pathTemperature);
+    client.print(pathTemperatureECS);
     client.println(" HTTP/1.1");
     client.print("Host: ");
-    client.println(serveurTemperature);
+    client.println(serveurTemperatureECS);
     client.println();
 
     while (!client.available())
@@ -1741,7 +1708,7 @@ void serveurweb() {
 
             clientweb.println("<div class=\"w3-card-4 w3-blue-grey w3-padding-16 w3-xxxlarge w3-center\">");
             clientweb.println("<p>Puissance routée</p>");
-            clientweb.print(replacePointParVirgule(CU));  // Valeur Recharge Cumulus
+            clientweb.print(replacePointParVirgule(CU));  // Valeur Recharge ECS
             clientweb.println(" W");
             clientweb.println("</div>");
 
@@ -1751,10 +1718,10 @@ void serveurweb() {
             clientweb.println(" W");
             clientweb.println("</div>");
 
-            if (sondeTemperature) {
+            if (sondeTemperatureECS) {
               clientweb.println("<div class=\"w3-card-4 w3-pale-blue w3-padding-16 w3-xxxlarge w3-center\">");
-              clientweb.println("<p>Température cumulus</p>");
-              clientweb.print(replacePointParVirgule(TEMPCU));  // Valeur Température cumulus
+              clientweb.println("<p>Température ECS</p>");
+              clientweb.print(replacePointParVirgule(TEMPCU));  // Valeur Température ECS
               clientweb.println(" °C");
               clientweb.println("</div>");
             }
@@ -1768,7 +1735,7 @@ void serveurweb() {
 
             clientweb.println("<div class=\"w3-card-4  w3-teal w3-padding-16 w3-xxxlarge w3-center\">");
             clientweb.println("<p>Energie produite</p>");
-            clientweb.print(replacePointParVirgule(CUMPV));  // Valeur cumul recharge cumulus
+            clientweb.print(replacePointParVirgule(CUMPV));  // Valeur cumul recharge ECS
             if (cumulEnWh) clientweb.println(" Wh");
             else clientweb.println(" kWh");
             clientweb.println("</div>");
@@ -1793,7 +1760,7 @@ void serveurweb() {
             if (cumulEnWh) clientweb.println(" Wh");
             else clientweb.println(" kWh");
             clientweb.println("</div>");
-            // <<<<<<<<<<<<<<<<<<<<<<<< Affichage des données MaxPV!  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+            // <<<<<<<<<<<<<<<<<<<<<<<< Fin affichage des données MaxPV!  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
             clientweb.println("</div>");
             clientweb.println("</body></html>");
             // The HTTP response ends with another blank line
@@ -1905,6 +1872,37 @@ void GetTimeDate() {
 }
 
 
+/***************************************************************************************
+**                        Lecture tension de la batterie
+***************************************************************************************/
+void GetBatteryVoltage() {
+
+  // Documentation :
+  // https://github.com/Xinyuan-LilyGO/T-Display-S3
+  // https://github.com/Xinyuan-LilyGO/T-Display-S3/blob/main/examples/GetBatteryVoltage/GetBatteryVoltage.ino
+  // https://docs.espressif.com/projects/esp-idf/en/release-v3.3/api-reference/peripherals/adc.html
+  // https://github.com/Xinyuan-LilyGO/TTGO-T-Display/blob/master/TFT_eSPI/examples/FactoryTest/FactoryTest.ino
+  esp_adc_cal_characteristics_t adc_chars;
+
+  // Get the internal calibration value of the chip
+  // "1100" is actually 1.1V in mV. 1.1V is the internal reference voltage that readings get compared to.
+  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+  uint32_t raw = analogRead(PIN_BAT_VOLT);
+  tensionBatterie = esp_adc_cal_raw_to_voltage(raw, &adc_chars) * 2; //The partial pressure is one-half
+
+  // Bizarre, car ce calcul semblerait plus juste quand on compare avec un Voltmètre. Bon... juste, dans certains cas.
+  //float battery_voltage = ((float)raw / 4095.0) * 2.0 * 3.3 * 1100;
+
+  // If the battery is not connected, the ADC detects the charging voltage of TP4056, which is inaccurate.
+  // Can judge whether it is greater than 4300mV. If it is less than this value, it means the battery exists.
+  /*if (tensionBatterie > 4300) {
+      AfficheDebugTFT ("No battery! U:" + String(tensionBatterie) + "mV");
+  } else {
+      AfficheDebugTFT ("U: " + String(tensionBatterie) + "mV");
+  }*/
+  // Message débug pour afficher tension de la batterie
+  //AfficheDebugTFT (String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
+}
 
 /*************************
 **  Gestion des boutons 
@@ -1920,7 +1918,7 @@ void handleClickGauche() {
     delay(5000);  // affichage pendant 5 secondes
   }
 
-  AfficheEclairage();
+  Affichage_Eclairage();
 }
 
 // Double clic gauche : sortie de la veille
@@ -1933,7 +1931,7 @@ void handleDoubleClickGauche() {
     ledcWrite(ledChannel, dim);
   }
 
-  //AfficheEclairage();
+  //Affichage_Eclairage();
 }
 
 /******************************************
@@ -2021,19 +2019,25 @@ void AfficheEcran (uint regle) {
   }
 }
 
-/* Affiche le message de Débug sur l'écran TFT (car parfois plus pratique ;) )*/
+/* Affiche le message de Débug sur l'écran TFT (car parfois, c'est plus pratique ;D )*/
 void AfficheDebugTFT (String message)
 {
+  // Sécurité : sauvegarde la valeur courante sur l'affichage principal, pour la remettre après l'affichage graphique du message débug. 
+  // Car sinon cela peut poser des problèmes d'affichage sur d'autres textes
+  uint8_t datumSvg = sprite.getTextDatum();
+
   sprite.setTextColor(TFT_YELLOW,TFT_BLACK);
   // Le message est cadré en bas à droite
   sprite.setTextDatum(BR_DATUM);
   sprite.drawString(message, 320, 170, 2);
   sprite.pushSprite(0, 0);
+
+  sprite.setTextDatum(datumSvg);
 }
 
 /***************************************************************************************
 **     Routine de test pour afficher toutes les icones sur l'écran
-**               Décommenter la ligne 446 pour l'activer
+**     Décommenter la ligne correspondante "test()" pour l'activer
 ***************************************************************************************/
 void test() {
   PV = "1234";
@@ -2041,8 +2045,7 @@ void test() {
   CU = "1290";
   TEMPCU = "55,5";
   tempExt = "3";
-  sondeTemperature = true;
+  sondeTemperatureECS = true;
   chauffageElectr = true;
   veille = false;
 }
-
