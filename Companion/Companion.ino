@@ -1,35 +1,42 @@
-//**********************************************************************************************************
-// COMPANION pour MaxPV!                                                                                  **/
+//***********************************************************************************************************
+// COMPANION pour MaxPV!                                                                                   **/
 //
 String Version = "1.2beta";
-//                                                                                                        **
-/***********************************************************************************************************
-** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie **
-************************************************************************************************************ 
-** ATTENTION :                                                                                            **
-** Le code est prévu pour LILYGO T-Display S3 avec écran 320x170                                          **   
-************************************************************************************************************
-** Repository du Companion MSun PV : https://github.com/JJHontebeyrie/Companion                           **
-************************************************************************************************************
-** Bibliothèques nécessaires :                                                                            **
-**                                                                                                        **
-**  https://github.com/PaulStoffregen/Time                                                                **
-**  https://github.com/JChristensen/Timezone                                                              **
-**  https://github.com/Bodmer/JSON_Decoder                                                                **
-**  https://github.com/Bodmer/OpenWeather                                                                 **
-**                                                                                                        **
-**  "Gestionnaire de bibliothèque" de Arduino IDE => à rajouter :                                         **
-**   - OneButton par Matthias Hertel v2.0.4                                                               **
-**                                                                                                        ** 
-**  "Gestionnaire de carte" de Arduino IDE => à rajouter :                                                **
-**   - esp32 par Espressif Systems v2.0.7 (attention, téléchargement très long!)                          **
-**                                                                                                        ** 
-** Ces bibliothèques doivent être décompactées et les dossiers obtenus sont                               **
-** ensuite collés dans /Documents/Arduino/libraries                                                       **
-************************************************************************************************************/
+//                                                                                                         **
+/************************************************************************************************************
+** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie  **
+************************************************************************************************************* 
+** ATTENTION :                                                                                             **
+** Le code est prévu pour LILYGO T-Display S3 avec écran 320x170                                           **   
+*************************************************************************************************************
+** Repository du Companion MSun PV : https://github.com/JJHontebeyrie/Companion                            **
+*************************************************************************************************************
+** Bibliothèques nécessaires :                                                                             **
+**                                                                                                         **
+**  1) A installer manuellement dans /Documents/Arduino/libraries en décompactant les bibliothèques ZIPpées**
+**                                                                                                         **
+**  https://github.com/PaulStoffregen/Time                                                                 **
+**  https://github.com/JChristensen/Timezone                                                               **
+**  https://github.com/Bodmer/JSON_Decoder                                                                 **
+**  https://github.com/Bodmer/OpenWeather                                                                  **
+**  TFT_eSPI : https://github.com/Bodmer/TFT_eSPI dans la version 2.5.34, attention à réaliser les actions **
+**     ci-dessous dans le fichier "User_Setup_Select.h" de la librairie :                                 **
+**     - décommenter la ligne "#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>"                      **
+**     - commenter la ligne "#include <User_Setup.h>"                                                      **
+**    Permet de déclarer les bons paramètres pour LilyGO S3.                                               **
+**    Si non paramétré alors l'écran s'affichera en noir!                                                  **
+**                                                                                                         **
+**  2) "Gestionnaire de bibliothèque" de Arduino IDE => à rajouter :                                       **
+**   - OneButton par Matthias Hertel v2.0.4                                                                **
+**   - ArduinoJson par Benoit Blachon v7.0.0                                                               **
+**                                                                                                         ** 
+**  3) "Gestionnaire de carte" de Arduino IDE => à rajouter :                                              **
+**   - esp32 par Espressif Systems v2.0.7 (attention, téléchargement très long!)                           **
+**                                                                                                         ** 
+*************************************************************************************************************/
 
-#include <TFT_eSPI.h>      // Voir pdf du github pour son installation
-#include <WiFi.h>          // Voir pdf du github pour son installation
+#include <TFT_eSPI.h>      // Attention : paramétrage de la librairie TFT_eSPI à réaliser pour utiliser LilyGO S3 (cf ci-dessus)
+#include <WiFi.h>          
 #include <JSON_Decoder.h>  // https://github.com/Bodmer/JSON_Decoder
 #include <OpenWeather.h>   // Latest here: https://github.com/Bodmer/OpenWeather
 #include "NTP_Time.h"      // Attached to this sketch, see that tab for library needs
@@ -58,6 +65,11 @@ int ecranCourant = -1;            // Identifie l'écran à afficher
 #define REGLE_MEME_ECRAN        0
 #define REGLE_ECRAN_SUIVANT     1
 #define REGLE_ECRAN_PRINCIPAL   2
+
+// Controle que le bon paramétrage est utilisé pour la bibliothèque TFT_eSPI (cf. instructions dans l'entête)
+#if USER_SETUP_ID != 206
+#error "Attention, la librairie TFT_eSPI n'est pas correctement paramétrée pour LilyGO S3! Action à réaliser : le fichier 'TFT_eSPI\User_Setup_Select.h' doit avoir la ligne '#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>' décommentée et la ligne '#include <User_Setup.h>' commentée."
+#endif
 
 
 TFT_eSPI lcd = TFT_eSPI();
@@ -171,6 +183,8 @@ const int UPDATE_INTERVALLE_TEMPO_SECS  = 60 * 60UL; // Soit 3600s (1h)
 String restantsBleus, restantsBlancs, restantsRouges, JourJJ, JourJJ1;
 uint32_t colorTempoJJ  = TFT_LIGHTGREY;
 uint32_t colorTempoJJ1 = TFT_LIGHTGREY;
+// Est-ce que l'année est bissextile ?
+#define EstAnneeBissextile(year) ((((year) % 4 == 0) && ((year) % 100 != 0)) || ((year) % 400 == 0))
 
 // Transforme les kWh en Wh (pour les index journalier)
 int kwh_to_wh(float kwh) { return kwh * 1000;}
@@ -182,17 +196,15 @@ float wh_to_kwh(float wh) {return wh / 1000.0;}
 ///////////////////////////////////////////////////////////////////////////////////////
 void setup() {
 
-  // Activation du port batterie interne pour LilyGo S3(cf. https://github.com/Xinyuan-LilyGO/T-Display-S3?tab=readme-ov-file#9%EF%B8%8F%E2%83%A3-faq)
-  if (lipo) {
-    // This IO15 must be set to HIGH, otherwise nothing will be displayed when USB is not connected.
-    pinMode(PIN_POWER_ON, OUTPUT);
-    digitalWrite(PIN_POWER_ON, HIGH);
-  }
-
-  // Initialisation ecran
+  // Activation du port batterie interne du LilyGo S3, afin que l'alimentation externe fonctionne (cf. https://github.com/Xinyuan-LilyGO/T-Display-S3?tab=readme-ov-file#9%EF%B8%8F%E2%83%A3-faq)
+  // This IO15 must be set to HIGH, otherwise nothing will be displayed when USB is not connected.
+  pinMode(PIN_POWER_ON, OUTPUT);
+  digitalWrite(PIN_POWER_ON, HIGH);
+  
+    // Initialisation ecran
   lcd.init();
   lcd.setRotation(rotation);
-  lcd.setSwapBytes(true);
+  //lcd.setSwapBytes(true);
 
   // Paramètres pour dimmer
   // Initialisation dès le début pour éviter les flashs de changement de luminosité pendant l'affichage de l'écran de démarrage
@@ -432,7 +444,6 @@ void RecuperationDonneesJoursTempo() {
   // Première requete pour connaitre la couleur du jour J et J+1
   //
   requeteTempo = ("https://particulier.edf.fr/services/rest/referentiel/searchTempoStore?dateRelevant=");
-  //requeteTempo += (an) + '-' + (mois) + '-' + (jour);
   requeteTempo += String(dateNow2);
   Serial.println(requeteTempo);
   http.begin(requeteTempo);
@@ -488,7 +499,7 @@ void RecuperationDonneesJoursTempo() {
 uint32_t Couleur_Jour_Tempo (String texteCouleurJour)
 {
   if      (texteCouleurJour.equalsIgnoreCase("TEMPO_BLEU"))
-      return TFT_BLUE;
+      return TFT_NAVY;
   else if (texteCouleurJour.equalsIgnoreCase("TEMPO_BLANC"))
       return TFT_WHITE;
   else if (texteCouleurJour.equalsIgnoreCase("TEMPO_ROUGE"))
@@ -673,8 +684,6 @@ suite:
   }
   // Affichage de la couleur tempo du jour et j+1 sur l'écran principal
   if (affichageEcranTempo) {
-    //sprite.fillRoundRect(2, 116, 15, 51, RECT_RADIUS, colorTempoJJ);
-    //sprite.fillRoundRect(19, 116, 5, 51, RECT_RADIUS, colorTempoJJ1);
     sprite.fillRoundRect(4, 120, 20, 20, RECT_RADIUS, colorTempoJJ);
     sprite.fillRoundRect(4, 144, 20, 20, RECT_RADIUS, colorTempoJJ1);
   }
@@ -953,13 +962,15 @@ void  AfficheEcranJoursTempo() {
 
   ecranCourant = ECRAN_JOURS_TEMPO;
 
+  uint year = String(dateNow2).substring(0,4).toInt();
   // Nombres Max de jours par catégorie
-  uint nbJoursBleusMax = 300; // 301 pour les années bissextiles, mais on ne le prend pas en compte
+  uint nbJoursBleusMax = ( EstAnneeBissextile(year) ? 301 : 300 ); // 301 pour les années bissextiles, mais on ne le prend pas en compte pour simplifier
   uint nbJoursBlancsMax = 43;
   uint nbJoursRougesMax = 22;
 
+
   // Jours restants reçus de l'API Rest ENEDIS
-  uint nbJoursBleusRestants = restantsBleus.toInt();
+  uint nbJoursBleusRestants  = restantsBleus.toInt();
   uint nbJoursBlancsRestants = restantsBlancs.toInt();
   uint nbJoursRougesRestants = restantsRouges.toInt();
 
@@ -974,16 +985,23 @@ void  AfficheEcranJoursTempo() {
   sprite.drawString("JOURS TEMPO RESTANTS", 123, 15, 2);
   sprite.drawString("Couleurs", 283, 15, 2);
 
-  // Barres pour chaque couleur des jours TEMPO (Y=34 à 134)
+  // Barres bleu/blanche/rouge pour chaque couleur des jours TEMPO (Y=34 à 134)
   hauteurBarre = 134 * nbJoursBleusRestants / nbJoursBleusMax;
-  sprite.drawRoundRect(  2, 34, 80, 134, RECT_RADIUS, TFT_BLUE); // Cadre de la jauge
-  sprite.fillRoundRect(  2, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_BLUE);
+  sprite.drawRoundRect(  2, 34, 80, 134, RECT_RADIUS, TFT_NAVY); // Cadre de la jauge (sur 2 pixels car le bleu est un peu sombre)
+  sprite.drawRoundRect(  3, 35, 78, 132, RECT_RADIUS, TFT_NAVY); 
+  sprite.fillRoundRect(  2, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_NAVY);
   hauteurBarre = 134 * nbJoursBlancsRestants / nbJoursBlancsMax;
   sprite.drawRoundRect( 84, 34, 80, 134, RECT_RADIUS, TFT_WHITE); // Cadre de la jauge
   sprite.fillRoundRect( 84, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_WHITE);
   hauteurBarre = 134 * nbJoursRougesRestants / nbJoursRougesMax;
   sprite.drawRoundRect(166, 34, 80, 134, RECT_RADIUS, TFT_RED); // Cadre de la jauge
   sprite.fillRoundRect(166, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_RED);
+  // Affichage échelle max
+  sprite.setTextDatum(MC_DATUM);
+  sprite.setTextColor(TFT_DARKGREY);
+  sprite.drawString(String(nbJoursBleusMax)  + " j",  42, 43, 2); 
+  sprite.drawString(String(nbJoursBlancsMax) + " j", 124, 43, 2); 
+  sprite.drawString(String(nbJoursRougesMax) + " j", 206, 43, 2); 
 
   // Affichage valeurs jours
   sprite.setTextDatum(MC_DATUM);
@@ -1359,6 +1377,7 @@ void AffichageIndicateurBatterie() {
 
   // Calibrage batterie : à décommenter pour visualiser la tension courante de la batterie
   //AfficheDebugTFT(String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
+  Serial.println("Batterie: " + String(tensionBatterie) + "mV " + String(pourcentageBatterie) + "%");
 
 
   // Détermination de la couleur interne de la pile
