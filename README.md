@@ -50,11 +50,64 @@ Si vous ne faites pas la mise à jour : l'écran des index journaliers sera inut
 
 
 ## Plateforme Arduino IDE
-Pour l'installation de la plateforme, se référer au manuel `Installation.pdf` disponible à l'adresse https://github.com/JJHontebeyrie/Companion/blob/main/Installation.pdf (utiliser le bouton "Download" si le document ne s'affiche pas directement).
 
-De nombreuses bibliothèques sont à installer dans le répertoire `librairies`.
+Pour compiler et téléverser le programme "Companion", l'installation de la plateforme nécessite :
+- les drivers pour la carte LilyGO S3 (ESP32 S3) à installer via le gestionnaire de cartes,
+- de nombreuses bibliothèques sont à installer dans le répertoire `librairies` d'ArduinoIDE.
 
-## Téléchargement des sources de "Companion"
+*Remarque : l'ancien manuel d'installation `Installation.pdf` est disponible à l'adresse https://github.com/JJHontebeyrie/Companion/blob/main/Installation.pdf (utiliser le bouton "Download" si le document ne s'affiche pas directement). Mais il s'agit d'une ancienne version des instructions, notamment pour les drivers de la carte. Aujourd'hui la carte LilyGO est reconnue correctement. Le lien est donné à titre d'information.*
+
+### Drivers carte **LilyGO S3**
+A installer à partir de la bibliothèque de cartes d'ArduinoIDE.
+
+Sélectionner "**esp32** par Espressif Systems" version 2.0.14 par exemple.
+L'installation peut prendre quelques minutes.
+
+![alt text](images/arduinoIde_esp32_S3.png)
+
+Une fois installé, sélectionner la carte LilyGO T-Display-S3 dans le haut d'Arduino IDE.
+
+![alt text](images/arduinoIde_selectionner_carte.png)
+
+
+### Librairie **TFT_eSPI**
+
+A télécharger à partir du lien : https://github.com/Bodmer/TFT_eSPI
+
+INPORTANT : sur les dernières versions (> 2.5.0), il faut paramétrer correctement le fichier `User_Setup_Select.h` pour que la librairie fonctionne avec le LilyGO S3.
+Sinon le programme compilera, mais l'écran restera noir!
+
+En effet, il faut réaliser les actions ci-dessous dans le fichier `User_Setup_Select.h` de la librairie : 
+- décommenter la ligne `#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>`
+- commenter la ligne `#include <User_Setup.h>`
+
+### Librairie **Time**
+A télécharger à partir du lien : https://github.com/PaulStoffregen/Time
+
+### Librairie **TimeZone**
+A télécharger à partir du lien : https://github.com/JChristensen/Timezone
+
+### Librairie **JSON Decoder**
+A télécharger à partir du lien : https://github.com/Bodmer/JSON_Decoder
+
+### Librairie **OpenWheather**
+A télécharger à partir du lien : https://github.com/Bodmer/OpenWeather
+
+### Librairie **OneButton**
+A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
+
+Prendre "**OneButton** par Matthias Hertel v2.5.0"
+
+![alt text](images/arduinoIde_Lib_OneButton.png)
+
+### Librairie **ArduinoJson**
+A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
+
+Prendre "**ArduinoJson** par Benoit Blachon v7.0.3"
+
+![alt text](images/arduinoIde_Lib_ArduinoJson.png)
+
+## Téléchargement des sources de "**Companion**"
 Depuis cette page Github, vous pouvez télécharger les sources de 2 façons selon le cas qui vous intéresse. La première me semble la plus adaptée.
 
 1. Depuis le tag de la version qui vous intéresse : permet de récupérer uniquement les sources de la  version concernée
@@ -76,7 +129,7 @@ Cliquez sur le bouton vert `<> Code`, puis sur `Download ZIP`.
 
 	Cette action téléchargera un fichier `Companion_for_MaxPV-main.zip` sur votre poste, qui contient un sous-répertoire "Companion" avec les sources.
 
-## Installation des sources de "Companion" dans ArduinoIDE
+## Installation des sources de "**Companion**" dans ArduinoIDE
 Décompresser l'archive ZIP de Companion dans le répertoire des croquis d'ArduinoIDE.
 Par exemple dans `D:\Documents\Arduino\` vous devez avoir une arborescence de répertoires du type : 
  - `D:\Documents\Arduino\Companion_for_MaxPV-1.0\Companion\`
@@ -84,9 +137,9 @@ dans laquelle se trouvent les fichiers `Companion.ino` et les autres fichiers `.
  
 Depuis l'Arduino IDE, ouvrir "**Fichier > Carnet de croquis > Companion_for_MaxPV-1.0 > Companion**".
 
-Modifier le fichier `perso.h` avec vos paramètres locaux. Chaque paramètre est documenté en commentaire dans le fichier.
+Modifier le fichier `perso.h` avec vos paramètres locaux (réseau WiFi, l'IP de MaxPV sur le réseau, etc...). Chaque paramètre est documenté en commentaire dans le fichier.
 
-## Installation du "Companion" sur le "LilyGo S3"
+## Installation du "Companion" sur le "LilyGO S3"
 Branchez la carte `LilyGo T-Display-S3` avec un cable USB à votre PC.
 
 Sélectionnez la carte `LilyGo T-Display-S3` et le port associé. Le nom de la carte apparait alors en gras.
@@ -114,19 +167,19 @@ L'écran est une synthèse des données les plus importantes fournies par MaxPV!
 
 ![Alt text](images/ecran_principal_1.png)
 
-Un indicateur dans le coin supérieur gauche vous averti de la fraicheur des données. Il faut attendre que le point vert disparaisse pour changer d'écran.
+Un indicateur dans le coin supérieur gauche vous averti quand les données sont en cours d'acquisition.
 
 Lorsqu'il n'y a pas de production PV, alors les heures de coucher et lever du soleil sont affichées.
 
 Des jauges colorées à droite des valeurs de production PV, du routage de l'eau chaude sanitaire (ECS) ou de la consommation, permettent de visualiser le niveau actuel par rapport au niveau maximum admis. 
 
 Code des couleurs : 
-- rouge : pas bon
-- vert : bon
+- rouge : "pas bon"
+- vert : ""bon
 
 La consommation réseau passe à `Injection réseau` si de l'énergie est envoyée vers le réseau. La jauge devient alors blanche et évalue la quantité "perdue" par rapport à la quantité produite. Par exemple, si elle est pleine et blanche, alors toute la production est injectée sur le réseau!
 
-Le bouton rond coloré à droite "réserve d'énergie" affiche la valeur de l'énergie disponible (en kW) avant de devoir consommer sur le réseau. Il permet de visualiser rapidement si vous pouvez lancer un appareil énergivore sans crainte (aspirateur, chauffage, etc...)
+**Le bouton rond coloré** à droite "réserve d'énergie" affiche la valeur de l'énergie disponible (en kW) avant de devoir consommer sur le réseau. Il permet de visualiser rapidement si vous pouvez lancer un appareil énergivore sans crainte (aspirateur, chauffage, etc...)
 
 Les couleurs indicatrices sont :
 - rouge : consommation réseau, pas de réserve d'énergie,
@@ -135,13 +188,23 @@ Les couleurs indicatrices sont :
 - vert : reserve d'énergie importante (jusqu'à 2000W),
 - bleu turquoise : réserve d'énergie très importante (plus de 2000W).
 
-L'indicateur wifi vous prévient de la qualité de la connexion. Si la connexion est mauvaise et que la récupération des données prend trop de temps, l'afficheur risque de redémarrer automatiquement au bout de 20 secondes.
+**L'indicateur wifi** vous prévient de la qualité de la connexion. Si la connexion est mauvaise et que la récupération des données prend trop de temps, l'afficheur risque de redémarrer automatiquement au bout de 20 secondes.
 
 ![Alt text](images/ecran_principal_2.png)
 ![Alt text](images/ecran_principal_3.png)
 ![Alt text](images/ecran_principal_4.png)
 ![Alt text](images/ecran_principal_5.png)
 ![Alt text](images/ecran_principal_6.png)
+
+**L'indicateur de batterie** est affiché, sous l'indicateur Wifi, si vous avez activé la prise en charge de la batterie dans le fichier `perso.h`.
+
+Il sera peut-être nécessaire de calibrer les valeurs `BAT_VAL_MAX` (charge 100%) et `BAT_VAL_MIN` (charge 0%) pour votre batterie. Pour vous aider, suivez les instructions dans le fichier `perso.h` pour afficher temporairement la tension de la batterie sur l'écran.
+
+|Indicateur | Description |
+|:-----:| :-----|
+|![alt text](images/ecran_batterie_1.png)| Batterie en charge|
+|![alt text](images/ecran_batterie_2.png) | Batterie chargée|
+|![alt text](images/ecran_batterie_3.png) ![alt text](images/ecran_batterie_4.png) | Batterie déchargée|
 
 ## Ecran réserve d'énergie
 L'écran dédié pour la réserve d'énergie permet d'améliorer la lisibilité de l'afficheur quand on est positionné plus loin. Et que l'on veut lancer des appareils en fonction de l'énergie disponible.
@@ -170,19 +233,25 @@ Un rafraichissemnet est effectué toutes les heures sur le portail edf.fr pour r
 
 ![Alt text](images/ecran_tempo_1.png)
 
-La couleur des jours est également affichée en bas à gauche de l'écran principal. Le 1er carré pour le jour actuel (ici "blanc"), le 2eme carré pour le lendemain (ici "bleu").
+La couleur des jours est également affichée en bas à gauche de l'écran principal. Le 1er carré pour le jour actuel (ici "blanc"), le 2eme carré pour le lendemain (ici "rouge").
 
 ![Alt text](images/ecran_principal_7.png)
 
-## Les boutons de commande
+## Les boutons de commande du boitier
 
-Le bouton orange supérieur gauche permet d'ajuster la luminosité. Appuyer plusieurs fois sur ce bouton pour modifier la valeur de la luminosité. L'écran est masqué automatique lors du rafraichissement des données.
+Le **bouton orange supérieur** gauche permet d'ajuster la luminosité. Appuyer plusieurs fois sur ce bouton pour modifier la valeur de la luminosité. La luminosité va s'incrémenter jusqu'à 100%, puis décroitre jusqu'à 20% et ainsi de suite.
+
+L'écran de luminosité est masqué automatiquement lors du rafraichissement des données.
 
 ![Alt text](images/ecran_luminosite_1.png)
 
-Le bouton orange inférieur gauche permet de changer d'écran. Un double clic permet de revenir directement au premier écran, sans faire défiler les suivants.
+Le **bouton orange inférieur** gauche permet de changer d'écran.
 
-Le bouton `Reset` placé sur le dessus de la carte permet de le redémarrer. Sinon, vous pouvez aussi débrancher/rebrancher l'alimentation.
+Remarque : Il faut attendre que le point vert de rafraichissement des données disparaisse pour pouvoir changer d'écran.
+
+Un double clic permet de revenir directement au premier écran, sans faire défiler les suivants.
+
+Le **bouton `Reset`** placé sur le dessus de la carte permet de le redémarrer. Sinon, vous pouvez aussi débrancher/rebrancher l'alimentation.
 
 
 ## Interface Web
@@ -200,6 +269,8 @@ Le code a été adpaté aux spécificités de MaxPV!
 # Matériel LiLyGO T-Display-S3
 Testé avec cette carte ESP32-S3 en USB-C et avec le boitier plastique (Shell Black) : https://fr.aliexpress.com/item/1005004496543314.html?spm=a2g0o.order_list.order_list_main.82.65435e5bYQbfne&gatewayAdapt=glo2fra
 
+(Carte ESP32-S3 avec écran LCD ST7789, résolution 170x320, 1.9 pouces).
+
 Mais d'autres cartes de votre choix avec les mêmes spécifications seront également adaptées.
 
 En avril 2023, le tout était vendu à 22€.
@@ -207,9 +278,11 @@ En avril 2023, le tout était vendu à 22€.
 
 # Versions
 
-## Version 1.2 (23/02/2024)
+## Version 1.2 (27/02/2024)
 - Ajout écran affichage des jours EDF TEMPO (activation paramétrable),
-- Amélioration de la gestion de la batterie.
+- Amélioration de la gestion de la batterie,
+- Nettoyage de code,
+- Aide au bon paramétrage de la librairie TFT_eSPI pour LilyGO S3.
 
 
 ## Version 1.1 (22/02/2024)
