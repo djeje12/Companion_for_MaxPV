@@ -1402,6 +1402,7 @@ void AffichageIndicateurBatterie() {
   //    Partie fine (haute) : 5 lignes
   //    Partie large (basse): 21 lignes
   int nbrLignes = pourcentageBatterie * 26 / 100;
+  int nbrLignesInit = nbrLignes;
 
   if (nbrLignes > 21 && nbrLignes <= 26 ) {
     // Remplissage du haut de la batterie
@@ -1413,17 +1414,25 @@ void AffichageIndicateurBatterie() {
     // Remplissage du bas de la batterie
     batterie.fillRect(2, 28-nbrLignes, 11, nbrLignes, selectedColor);
   } 
-  if (pourcentageBatterie < 10) {
-    // On affiche un "!" d'avertissement
+  /*if (pourcentageBatterie < 10) {
+    // On rajoute un "!" d'avertissement
     batterie.setTextDatum(ML_DATUM);
     batterie.setTextColor(TFT_RED);
     batterie.drawString("!", 4, 18, 4);
+  }*/
+  // Affichage du % sur la batterie
+  batterie.setTextDatum(MC_DATUM);
+  // La valeur est affichée sur la partie "pleine" du bas. Sauf si trop petite : lors en haut
+  if (nbrLignesInit != 26) { // Pas à 100%
+    if (nbrLignesInit > 10) {
+      batterie.setTextColor(TFT_BLACK);
+      batterie.drawString(String(pourcentageBatterie), 8, 28-nbrLignesInit/2); // 28 = 2px bordure + 26 lignes max
+    } else {
+      batterie.setTextColor(selectedColor);
+      batterie.drawString(String(pourcentageBatterie), 8, 7+(21-nbrLignesInit)/2); // 7 = 2px bordure + lignes du haut inutilisables
+    }
   }
-  /*// Affichage du % sur la batterie
-  batterie.setTextDatum(ML_DATUM);
-  batterie.setTextColor(TFT_BLACK);
-  batterie.drawString(String(pourcentageBatterie), 1, 15, 2);*/
-
+  
   batterie.pushToSprite(&sprite, 303, 92, TFT_BLACK);
 }
 
