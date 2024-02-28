@@ -30,22 +30,27 @@ String api_key = "**************************";
 String units = "metric";  // ou "imperial"
 String language = "fr";
 
+/*******************************************
+ * Affichage des informations TEMPO de EDF *
+ *******************************************/
+// Mettre à true si on souhaite afficher l'écran du ombre de jours TEMPO (fournis par EDF)
+bool affichageEcranTempo = true;
 
 /***************************************************************
  * Paramètres pour afficher la température avec ou hors MaxPV! *
  ***************************************************************/
-// Mettre "sonde" à "true" pour afficher la température du cumulus sur l'écran principal. Sinon mettre à "false"
-bool sonde = false;
-// Mettre "sondeMaxPV" à "true" si vous utilisez la sonde avec **MaxPV > 3.60**. Cela évite donc de faire des appels 
+// Mettre "sondeTemperatureECS" à "true" pour afficher la température de l'ECS sur l'écran principal. Sinon mettre à "false"
+bool sondeTemperatureECS = false;
+// Mettre également "sondeTemperatureECSMaxPV" à "true" si vous utilisez la sonde de température avec **MaxPV > 3.60**. Cela évite donc de faire des appels 
 // à un serveur externe pour la température. Sinon mettre à "false" si vous utilisez un serveur dédié pour la température.
-bool sondeMaxPV = true;
+bool sondeTemperatureECSMaxPV = true;
 
 /*** Début Paramétrage serveur de température ***/
 // Adresse IP du serveur pour appeler l'API retournant la température du ballon d'eau chaude
 //   Format : NNN.NNN.NNN.NNN
-char serveurTemperature[] = "192.168.***.***"; // Exemple : "192.168.1.12"
+char serveurTemperatureECS[] = "192.168.***.***"; // Exemple : "192.168.1.12"
 //   Port du serveur de température
-int portServeurTemperature = 80; // Exemple : "80" ou "8080"
+int portServeurTemperatureECS = 80; // Exemple : "80" ou "8080"
 // Chemin vers l'API retournant la température deu ballon d'eau chaude.
 //   Si l'API ne  retourne pas directement la valeur de la température (Ex : 62,5), alors alimenter plus bas les paramètres "baliseDebut" et "baliseFin" qui permettent d'extraire la bonne donnée.
 //   Format : /XXXXXX
@@ -54,7 +59,7 @@ int portServeurTemperature = 80; // Exemple : "80" ou "8080"
 //     - Shelly 1 : /status
 //     - Home Assistant : /json.htm?type=devices&rid=180 (à confirmer?)
 //     - MaxPV > 3.60 : /api/get?data=24 (mais privilégiez l'utilisation de "sondeMaxPV = true" si vous pouvez)
-char pathTemperature[] = "/api/get?data=24"; // Exemple : "/myapi/data?key=a2z3da0"
+char pathTemperatureECS[] = "/api/get?data=24"; // Exemple : "/myapi/data?key=a2z3da0"
 // Définition des balises début et fin pour récupérer la température dans un chaine de caractères structurée, sinon laisser vide
 //   Si la valeur de la balise contient des double quotes ("), il faut rajouter un anti-slash (\) pour que le caractère soit interprété correctement!
 //   Exemple de balises début et fin pour :
@@ -88,8 +93,11 @@ bool cumulEnWh = true; // Pour les cumuls journalier. Mettre "true" pour affiche
 //   Valeurs possibles : 0, 50, 100, 150, 200, 250
 int luminositeChoisie = 100;
 
-// Si l'alimentation se fait par batterie, mettre "true". Sinon mettre "false"
+// Batterie d'alimentation : si l'alimentation se fait par batterie, mettre "true". Sinon mettre "false".
 bool lipo = false;
+// Calibration de la batterie : pour vous aider à trouver les bonnes valeurs vous pouvez décommenter la ligne "AfficheDebugTFT[...]" dans la fonction "AffichageIndicateurBatterie()" (ligne 1361). Cela vous permettra de visualiser la tension de la batterie
+#define BAT_VAL_MAX 4000 // Tension de la batterie en charge max (en mV)
+#define BAT_VAL_MIN 2700 // Tension de la batterie en charge min (en mV) à laquelle l'arduino commence à s'éteindre
 
 // Si chauffage par radiateurs électriques, mettre "true" sinon "false". Permet d'afficher une icone radiateur en cas de grosse consommation
 bool chauffageElectr = false;
