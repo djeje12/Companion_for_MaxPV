@@ -48,11 +48,12 @@ Vérifiez que vous possédez au moins la version 3.60 de MaxPV!, car le Companio
 En effet, une modification de l'API de MaxPV! sur la version 3.60 est incompatible avec la précédente version 3.57.
 Si vous ne faites pas la mise à jour : l'écran des index journaliers sera inutilisable, ainsi que la température de la sonde de MaxPV.
 
+
 ## Plateforme Arduino IDE
 
 Pour compiler et téléverser le programme "Companion", l'installation de la plateforme nécessite :
 - les drivers pour la carte LilyGO S3 (ESP32 S3) à installer via le gestionnaire de cartes,
-- de nombreuses bibliothèques sont à installer dans le répertoire `librairies` d'ArduinoIDE.
+- les bibliothèques, listées dans les paragraphes ci-dessous, à installer dans le répertoire `librairies` d'ArduinoIDE.
 
 *Remarque : l'ancien manuel d'installation `Installation.pdf` est disponible à l'adresse https://github.com/JJHontebeyrie/Companion/blob/main/Installation.pdf (utiliser le bouton "Download" si le document ne s'affiche pas directement). Mais il s'agit d'une ancienne version des instructions, notamment pour les drivers de la carte. Aujourd'hui la carte LilyGO est reconnue correctement. Le lien est donné à titre d'information.*
 
@@ -173,21 +174,21 @@ Lorsqu'il n'y a pas de production PV, alors les heures de coucher et lever du so
 Des jauges colorées à droite des valeurs de production PV, du routage de l'eau chaude sanitaire (ECS) ou de la consommation, permettent de visualiser le niveau actuel par rapport au niveau maximum admis. 
 
 Code des couleurs : 
-- rouge : "pas bon"
-- vert : ""bon
+- _**rouge**_ : "pas bon"
+- _**vert**_ : "bon"
 
 La consommation réseau passe à `Injection réseau` si de l'énergie est envoyée vers le réseau. La jauge devient alors blanche et évalue la quantité "perdue" par rapport à la quantité produite. Par exemple, si elle est pleine et blanche, alors toute la production est injectée sur le réseau!
 
 **Le bouton rond coloré** à droite "réserve d'énergie" affiche la valeur de l'énergie disponible (en kW) avant de devoir consommer sur le réseau. Il permet de visualiser rapidement si vous pouvez lancer un appareil énergivore sans crainte (aspirateur, chauffage, etc...)
 
 Les couleurs indicatrices sont :
-- rouge : consommation réseau, pas de réserve d'énergie,
-- orange : réserve d'énergie faible (moins de 200W),
-- jaune : réserve d'énergie moyenne (moins de 1000W),
-- vert : reserve d'énergie importante (jusqu'à 2000W),
-- bleu turquoise : réserve d'énergie très importante (plus de 2000W).
+- _**rouge**_ : consommation réseau, pas de réserve d'énergie,
+- _**orange**_ : réserve d'énergie faible (moins de 200W),
+- _**jaune**_ : réserve d'énergie moyenne (moins de 1000W),
+- _**vert**_ : reserve d'énergie importante (jusqu'à 2000W),
+- _**bleu turquoise**_ : réserve d'énergie très importante (plus de 2000W).
 
-**L'indicateur wifi** vous prévient de la qualité de la connexion. Si la connexion est mauvaise et que la récupération des données prend trop de temps, l'afficheur risque de redémarrer automatiquement au bout de 20 secondes.
+**L'indicateur wifi** vous prévient de la qualité de la connexion. Si la connexion est mauvaise et que la récupération des données prend trop de temps, l'afficheur **redémarrera automatiquement au bout de 20 secondes**.
 
 ![Alt text](images/ecran_principal_2.png)
 ![Alt text](images/ecran_principal_3.png)
@@ -277,7 +278,7 @@ En avril 2023, le tout était vendu à 22€.
 
 # Versions
 
-## Version 1.2 (27/02/2024)
+## Version 1.2 (28/02/2024)
 - Ajout écran affichage des jours EDF TEMPO (activation paramétrable),
 - Amélioration de la gestion de la batterie,
 - Nettoyage de code,
