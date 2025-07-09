@@ -1,7 +1,7 @@
 //***********************************************************************************************************
 // COMPANION pour MaxPV!                                                                                   **/
 //
-String Version = "1.2";
+String Version = "1.3";
 //                                                                                                         **
 /************************************************************************************************************
 ** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie  **
@@ -13,32 +13,29 @@ String Version = "1.2";
 *************************************************************************************************************
 ** Bibliothèques nécessaires :                                                                             **
 **                                                                                                         **
-**  1) A installer manuellement dans /Documents/Arduino/libraries en décompactant les bibliothèques ZIPpées**
+**  1) "Gestionnaire de carte" de Arduino IDE => à rajouter :                                              **
+**   - esp32 par Espressif Systems v2.0.7 (attention, téléchargement très long!)                           **
 **                                                                                                         **
-**  https://github.com/PaulStoffregen/Time                                                                 **
-**  https://github.com/JChristensen/Timezone                                                               **
-**  https://github.com/Bodmer/JSON_Decoder                                                                 **
-**  https://github.com/Bodmer/OpenWeather                                                                  **
-**  TFT_eSPI : https://github.com/Bodmer/TFT_eSPI dans la version 2.5.34, attention à réaliser les actions **
-**     ci-dessous dans le fichier "User_Setup_Select.h" de la librairie :                                 **
-**     - décommenter la ligne "#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>"                      **
-**     - commenter la ligne "#include <User_Setup.h>"                                                      **
-**    Permet de déclarer les bons paramètres pour LilyGO S3.                                               **
-**    Si non paramétré alors l'écran s'affichera en noir!                                                  **
+**     voir pour migration de v2.x vers v3.x :                                                             **
+*      https://docs.espressif.com/projects/arduino-esp32/en/latest/migration_guides/2.x_to_3.0.html#       **
 **                                                                                                         **
 **  2) "Gestionnaire de bibliothèque" de Arduino IDE => à rajouter :                                       **
 **   - OneButton par Matthias Hertel v2.0.4                                                                **
 **   - ArduinoJson par Benoit Blachon v7.0.0                                                               **
-**                                                                                                         ** 
-**  3) "Gestionnaire de carte" de Arduino IDE => à rajouter :                                              **
-**   - esp32 par Espressif Systems v2.0.7 (attention, téléchargement très long!)                           **
+**   - TFT_eSPI : https://github.com/Bodmer/TFT_eSPI dans la version 2.5.34, attention à réaliser          **
+**     les actions ci-dessous dans le fichier "Arduino\librairies\User_Setup_Select.h" de la librairie :   **
+**     - décommenter la ligne "#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>"                      **
+**     - commenter la ligne "#include <User_Setup.h>"                                                      **
+**    Permet de déclarer les bons paramètres pour LilyGO S3.                                               **
+**    Si non paramétré alors l'écran s'affichera en noir!                                                  **
 **                                                                                                         ** 
 *************************************************************************************************************/
 
 #include <TFT_eSPI.h>      // Attention : paramétrage de la librairie TFT_eSPI à réaliser pour utiliser LilyGO S3 (cf ci-dessus)
 #include <WiFi.h>          
-#include <JSON_Decoder.h>  // https://github.com/Bodmer/JSON_Decoder
-#include <OpenWeather.h>   // Latest here: https://github.com/Bodmer/OpenWeather
+#include <ArduinoJson.h>   // Doc https://github.com/bblanchon/ArduinoJson
+#include <OpenWeather.h>   // Doc https://github.com/Bodmer/OpenWeather
+#include <HTTPClient.h>    // Doc https://github.com/espressif/arduino-esp32
 #include "NTP_Time.h"      // Attached to this sketch, see that tab for library needs
 #include <OneButton.h>     // OneButton par Matthias Hertel (dans le gestionnaire de bibliothèque de Arduino IDE)
 #include "perso.h"         // Données personnelles à modifier dans le fichier (voir en haut de cet écran)
@@ -47,9 +44,10 @@ String Version = "1.2";
 #include "meteo.h"         // Icones météo
 #include <ESPmDNS.h>       // Pour le mDNS
 #include <esp_adc_cal.h>   // Pour gérer la calibration de la batterie (cf. https://github.com/Xinyuan-LilyGO/T-Display-S3/blob/main/examples/GetBatteryVoltage/GetBatteryVoltage.ino)
+
 // Watchdog (relance le Companion si perte de signal) Idée géniale de Bellule!
-#include <esp_task_wdt.h>  // Watchdog en cas de déconnexion
-#define WDT_TIMEOUT 20     // Délai d'activation du timeout du watchdog en secondes
+#include <esp_task_wdt.h>  // Watchdog en cas de déconnexion ou blocage
+#define WDT_TIMEOUT 40     // Délai d'activation du timeout du watchdog en secondes
 
 #define MAXPV_DELAI_MAJ_SECS  10  // Intervalle en s de rafraichissement des données de MaxPV!
 #define MAXPV_DATA_API_SIZE   29  // Nombre d'éléments retournés par l'API de MaxPV! "/api/get?alldata"
@@ -68,7 +66,7 @@ int ecranCourant = -1;            // Identifie l'écran à afficher
 
 // Controle que le bon paramétrage est utilisé pour la bibliothèque TFT_eSPI (cf. instructions dans l'entête)
 #if USER_SETUP_ID != 206
-#error "Attention, la librairie TFT_eSPI n'est pas correctement paramétrée pour LilyGO S3! Action à réaliser : le fichier 'TFT_eSPI\User_Setup_Select.h' doit avoir la ligne '#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>' décommentée et la ligne '#include <User_Setup.h>' commentée."
+#error "Attention, la librairie TFT_eSPI n'est pas correctement paramétrée pour LilyGO S3! Action à réaliser : le fichier 'Documents\Arduino\librairies\TFT_eSPI\User_Setup_Select.h' doit avoir la ligne '#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>' décommentée et la ligne '#include <User_Setup.h>' commentée."
 #endif
 
 
@@ -120,19 +118,19 @@ bool awaitingArrivals = true;    // Passe à "false" quand on vient de lire les 
 bool arrivalsRequested = false;  // Passe à "true" quand on est déjà en train de lire les données. Passe à "false" toutes les 10s lors de la réinit du cycle
 
 
-// Variables pour dimmer
-const int PIN_LCD_BL = 38;
-const int freq = 1000;
-const int ledChannel = 0;
-const int resolution = 8;
+// Configuration PWM
+#define LCD_BACKLIGHT_PIN  38   // Pin BACKLIGHT
+#define LCD_PWM_FREQ       1000 // 1 kHz
+#define LCD_PWM_CHANNEL    0    // Canal PWM pour luminosité écran
+#define LCD_PWM_RESOLUTION 8    // 8 bits (0-255)
 bool inverse = true;
 int dim, x;
 
 // Variables pour batterie
 long tensionBatterie;           // Voltage batterie en mV
 long pourcentageBatterie = 100; // Charge en pourcentage de la batterie (100% à l'initialisation)
-#define PIN_POWER_ON 15
-#define PIN_BAT_VOLT 4
+#define PIN_POWER_ON  15
+#define PIN_BAT_VOLT  4
 #define MIN_CHARG_USB 4300      // Tension mV minimum à partir de laquelle on considère que la batterie est en cours de charge (ie : port USB branché)
 
 
@@ -158,11 +156,12 @@ String lever, coucher, tempExt, humExt, icone, ID;
 OW_Weather ow;  // Weather forecast librairie instance
 // Update toutes les 15 minutes, jusqu'à 1000 requêtes par jour gratuit (soit ~40 par heure)
 const int UPDATE_WEATHER_INTERVAL_SECS = 15 * 60UL;  // 15 minutes (900s)
-bool booted = true;
+bool doItImmediately = true; // Pour forcer le raffraichissement immédiat sans attendre la temporisation (pour le démarrage par exemple)
 long lastDownloadUpdateWeather = millis();
 String timeNow = "";
 String dateNow = "";
 String dateNow2 = "";
+String dateTomorrow2 = "";
 
 // Variables pour serveur web
 WiFiServer server(80);
@@ -173,14 +172,13 @@ unsigned long previousTime = 0;        // Previous time
 const long timeoutTime = 5000;
 
 
-// Déclaration pour les jours TEMPO
-// Code repris de "Afficheur_Tempo" de pjeantaud
-// A corriger, car on utilise une 2ième API JSON (en plus de celle de la météo), idem pour la connexion Web. Mais bon ça marche et pas eu suffisament de temps pour optimiser tout ça...
+// Déclarations pour les tarifs des jours TEMPO
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 long lastUpdateTempo = 0;
 const int UPDATE_INTERVALLE_TEMPO_SECS  = 60 * 60UL; // Soit 3600s (1h)
-String restantsBleus, restantsBlancs, restantsRouges, JourJJ, JourJJ1;
+uint nbJoursBleusConsommes, nbJoursBlancsConsommes, nbJoursRougesConsommes; // Jours Consommes reçus de l'API Rest ENEDIS
+int JourJJ, JourJJ1; // Code de la couleur TEMPO des jours J et J+1
 uint32_t colorTempoJJ  = TFT_LIGHTGREY;
 uint32_t colorTempoJJ1 = TFT_LIGHTGREY;
 // Est-ce que l'année est bissextile ?
@@ -208,12 +206,12 @@ void setup() {
 
   // Paramètres pour dimmer
   // Initialisation dès le début pour éviter les flashs de changement de luminosité pendant l'affichage de l'écran de démarrage
-  ledcSetup(ledChannel, freq, resolution);
-  ledcAttachPin(PIN_LCD_BL, ledChannel);
+  ledcSetup(LCD_PWM_CHANNEL, LCD_PWM_FREQ, LCD_PWM_RESOLUTION);
+  ledcAttachPin(LCD_BACKLIGHT_PIN, LCD_PWM_CHANNEL);
   // Tamisage écran par défaut (foçage à 100 minimum au démarrage en cas de mauvais paramétrage)
   if (luminositeChoisie < 100) dim = 100;
   else                         dim = luminositeChoisie;
-  ledcWrite(ledChannel, dim);
+  ledcWrite(LCD_PWM_CHANNEL, dim);
 
   // Affichage logo depart
   lcd.fillScreen(TFT_BLACK);
@@ -285,6 +283,7 @@ void setup() {
     if (lastTime + (WDT_TIMEOUT - 1) * 1000 < millis()) {
       // Pour réinitialiser la zone de texte "Connexion...."
       depart.fillRoundRect(0, 143, 320, 15, 0, TFT_BLACK);
+      // Message d'échec de la connexion
       depart.drawString("Echec de la connexion ...", 160, 150, 2);
     } else {
       // Pour réinitialiser la zone de texte "Connexion...."
@@ -325,7 +324,7 @@ void setup() {
 
   // Tamisage écran (dim varie de 0 à 250) d'après le paramétrage dans "perso.h"
   dim = luminositeChoisie;
-  ledcWrite(ledChannel, dim);
+  ledcWrite(LCD_PWM_CHANNEL, dim);
 
   if (veille) {
     delay(5000);
@@ -377,14 +376,14 @@ void loop() {
 
   // Données météo
   // Test pour voir si un rafraissement est nécessaire
-  if (booted || (lastDownloadUpdateWeather + UPDATE_WEATHER_INTERVAL_SECS * 1000UL < millis())) { // 15 min convertis en ms
+  if (doItImmediately || (lastDownloadUpdateWeather + UPDATE_WEATHER_INTERVAL_SECS * 1000UL < millis())) { // 15 min convertis en ms
     RecuperationDonneesMeteo();
     lastDownloadUpdateWeather = millis();
   }
 
-  // Données EDF jours TEMPO
+  // Données EDF tarifs des jours TEMPO
   if (affichageEcranTempo)
-    if (booted || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO_SECS  * 1000UL < millis())) {
+    if (doItImmediately || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO_SECS  * 1000UL < millis())) {
       RecuperationDonneesJoursTempo();
       lastUpdateTempo = millis();
     }
@@ -412,7 +411,7 @@ void loop() {
     dim = luminositeChoisie;       // Pour la sortie de veille
     if (PV.toInt() <= 0) dim = 0;  // on met l'écran en arrêt si pv = 0
 
-    ledcWrite(ledChannel, dim);
+    ledcWrite(LCD_PWM_CHANNEL, dim);
   }
 
   // Ecoute des boutons
@@ -422,7 +421,7 @@ void loop() {
   // Teste si demande lecture serveur web
   serveurweb();
 
-  booted = false;
+  doItImmediately = false;
   esp_task_wdt_reset();
 }
 
@@ -436,78 +435,118 @@ void loop() {
 ***************************************************************************************/
 void RecuperationDonneesJoursTempo() {
 
-  String requeteTempo;
-
   Serial.println("[HTTP TEMPO] begin...");
+
+  //
+  // Utilisation de l'API TEMPO en requêtant sur la période pour remonter toutes les informations sur 
+  // les jours du début la période (1er septembre) jusqu'à la date actuelle du lendemain.
+  // Ainsi il est possible de compter le nombre de jours déjà passés et restants sur un tarif (BLEU, BLANC, ROUGE).
+  // Et également de connaitre la couleur du jour J et J+1
+  //
+
+  // Détermination de la période d'après la date courante. La période est du 01/09/N au 31/08/N+1
+  String periode = "";
+  if (dateNow2.substring(5,10) >= "09-01" && dateNow2.substring(5,10) <= "12-31") {
+    // Alors la période est l'année de la date en cours + l'année suivante (ex : 2025-09-02 => période 2025-2026)
+    periode = dateNow2.substring(0,4) + "-" + String(dateNow2.substring(0,4).toInt() + 1);
+
+  } else { //if (dateNow2.substring(5,10) >= "01-01" && dateNow2.substring(5,10) <= "08-31")
+    // Alors la période est l'année précédente de la date en cours + l'année en cours (ex : 2026-01-02 => période 2025-2026)
+    periode = String(dateNow2.substring(0,4).toInt() - 1) + "-" + dateNow2.substring(0,4);
+  }
+
+  String requeteTempo;
+  requeteTempo = ("https://www.api-couleur-tempo.fr/api/joursTempo?periode=");
+  requeteTempo += periode;
+  Serial.println("[HTTP TEMPO] Requête : " + requeteTempo);
+
   HTTPClient http;
-  //
-  // Première requete pour connaitre la couleur du jour J et J+1
-  //
-  requeteTempo = ("https://particulier.edf.fr/services/rest/referentiel/searchTempoStore?dateRelevant=");
-  requeteTempo += String(dateNow2);
-  Serial.println(requeteTempo);
   http.begin(requeteTempo);
+  Serial.println("[HTTP TEMPO] GET...");
+  int httpCode = http.GET();
+  Serial.printf("[HTTP TEMPO] : %d\n", httpCode);
 
-  Serial.print("[HTTP TEMPO] GET...\n");
-  int httpJour = http.GET();
-  Serial.printf("", httpJour);
-  String recup1 = http.getString();
-  Serial.println(recup1);
+  if (httpCode == HTTP_CODE_OK) {
+    String payload = http.getString();
+    /* Exemple de réponse :
+      [{"dateJour":"2024-09-01","codeJour":1,"periode":"2024-2025"}, {"dateJour":"2024-09-02","codeJour":1,"periode":"2024-2025"},
+       {"dateJour":"2024-09-03","codeJour":1,"periode":"2024-2025"}, {"dateJour":"2024-09-04","codeJour":2,"periode":"2024-2025"},
+       {"dateJour":"2024-09-05","codeJour":0,"periode":"2024-2025"}] */
+    //Serial.println("payload " + payload);
 
-  StaticJsonDocument<200> doc1;   
-  deserializeJson(doc1, recup1); 
-  const char* JourJ = doc1["couleurJourJ"];
-  const char* JourJ1 = doc1["couleurJourJ1"];
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, payload);
+    if (err) {
+      Serial.println("[HTTP TEMPO] Erreur parsing JSON : " + String(err.f_str()));
+    } else {
 
-  JourJJ =  String(JourJ); 
-  Serial.println("Jour J : " + JourJJ);
-  JourJJ1 = String(JourJ1);
-  Serial.println("Jour J+1 : " + JourJJ1);
-  // Résultats :
-  colorTempoJJ = Couleur_Jour_Tempo (JourJJ);
-  colorTempoJJ1 = Couleur_Jour_Tempo (JourJJ1);
+      JsonArray array = doc.as<JsonArray>();
+      nbJoursBleusConsommes =  0; 
+      nbJoursBlancsConsommes = 0;
+      nbJoursRougesConsommes = 0;
+      JourJJ = 0;
+      JourJJ1 = 0;
+      bool trouve = false;
 
-  //
-  // Deuxième requête pour connaitre le nombre de jours restants par couleur
-  //
-  requeteTempo = "https://particulier.edf.fr/services/rest/referentiel/getNbTempoDays?TypeAlerte=TEMPO";
-  Serial.println(requeteTempo);
-  http.begin(requeteTempo);
-  
-  Serial.println("[HTTP] GET...");
-  int httpJoursRestants = http.GET();   
-  String recup2 = http.getString();
+      for (JsonObject jour : array) {
+        // Couleur de la date du jour
+        if (String(jour["dateJour"].as<const char*>()).startsWith(dateNow2)) {
+          JourJJ = jour["codeJour"].as<int>();
+          trouve = true;
+        // Couleur de la date du lendemain
+        } else if (String(jour["dateJour"].as<const char*>()).startsWith(dateTomorrow2)) {
+          JourJJ1 = jour["codeJour"].as<int>();
+          trouve = true;
+        }
 
-  StaticJsonDocument<200> doc2;   
-  deserializeJson(doc2, recup2); 
-  int couleurParamBLANC = doc2["PARAM_NB_J_BLANC"];
-  int couleurParamROUGE = doc2["PARAM_NB_J_ROUGE"];
-  int couleurParamBLEU = doc2["PARAM_NB_J_BLEU"];
+        // Comptage des jours consommés par couleur sur la période
+        switch (jour["codeJour"].as<int>())
+        {
+          case 1 : // Tarif BLEU
+            nbJoursBleusConsommes++;
+            break;
+          case 2 : // Tarif BLANC
+            nbJoursBlancsConsommes++;
+            break;
+          case 3 : // Tarif ROUGE
+            nbJoursRougesConsommes++;
+            break;
+        }
+
+      }
+      if (!trouve) {
+        Serial.println("[HTTP TEMPO] Date JourJJ ou JourJJ1 non trouvée dans la période " + periode + " !");
+      }
+    }
+
+  } else {
+    Serial.printf("[HTTP TEMPO] Erreur HTTP : %d\n", httpCode);
+  }
+
   http.end();
-  Serial.println("[HTTP TEMPO] End");
 
   // Résultats :
-  restantsBleus =  String(couleurParamBLEU); 
-  restantsBlancs = String(couleurParamBLANC);
-  restantsRouges = String(couleurParamROUGE); 
-  Serial.println("TEMPO Jours restants => Bleu : " + restantsBleus+ " / Blancs : " + restantsBlancs+ " / Rouges : " + restantsRouges);
+  colorTempoJJ  = Couleur_Jour_Tempo (JourJJ);
+  colorTempoJJ1 = Couleur_Jour_Tempo (JourJJ1);
+  Serial.println("[HTTP TEMPO] Jours Consommés => Bleu : " + String(nbJoursBleusConsommes) + " / Blancs : " + String(nbJoursBlancsConsommes) + " / Rouges : " + String(nbJoursRougesConsommes) );
 
   esp_task_wdt_reset();
 }
 
-/* Détermine la couleur du jour TEMPO en fonction du texte retourné */
-uint32_t Couleur_Jour_Tempo (String texteCouleurJour)
+/* Détermine la couleur du jour TEMPO en fonction de la valeur du codeJour retourné */
+uint32_t Couleur_Jour_Tempo (int codeCouleurJourTempo)
 {
-  if      (texteCouleurJour.equalsIgnoreCase("TEMPO_BLEU"))
-      return TFT_NAVY;
-  else if (texteCouleurJour.equalsIgnoreCase("TEMPO_BLANC"))
+  switch (codeCouleurJourTempo)
+  {
+    case 1 : // Tarif BLEU
+      return TFT_BLUE;
+    case 2 : // Tarif BLANC
       return TFT_WHITE;
-  else if (texteCouleurJour.equalsIgnoreCase("TEMPO_ROUGE"))
+    case 3 : // Tarif ROUGE
       return TFT_RED;
-  else if (texteCouleurJour.equalsIgnoreCase("NON_DEFINI"))
+    default : // Non défini
       return TFT_LIGHTGREY;
-  else
-      return TFT_LIGHTGREY;
+  }
 }
 
 
@@ -568,7 +607,7 @@ void AfficheEcranPrincipal() {
   else                  sprite.drawString(" EXPORTATION RESEAU ", 115, 126, 2);
 
   // Panneau de droite sur l'écran : heure, date, batterie
-  sprite.drawRoundRect(234,  0, 86, 54, RECT_RADIUS, TFT_LIGHTGREY);
+  sprite.drawRoundRect(228,  0, 92, 54, RECT_RADIUS, TFT_LIGHTGREY);
 
   // Affichage Météo
   meteo.pushImage(0,0,50,50,unknown);
@@ -610,8 +649,8 @@ suite:
 
   // Affichage heure et date
   sprite.setTextColor(TFT_WHITE);
-  sprite.drawString(String(timeNow), 277, 19, 4);
-  sprite.drawString(String(dateNow), 277, 42, 2);
+  sprite.drawString(String(timeNow), 274, 19, 4);
+  sprite.drawString(String(dateNow), 274, 42, 2);
 
   // Puissance du signal WiFi
   AffichageSignalWifi();
@@ -626,7 +665,8 @@ suite:
     // Pour afficher le cercle de température coloré en fonction de la valeur de la température
     selectedColor = TFT_CYAN;
     if (TEMPCU.toInt() >= 30) selectedColor = color8;     // Bleu clair
-    if (TEMPCU.toInt() >= 50) selectedColor = TFT_ORANGE; // Orange
+    if (TEMPCU.toInt() >= 45) selectedColor = TFT_YELLOW; // Jaune
+    if (TEMPCU.toInt() >= 55) selectedColor = TFT_ORANGE; // Orange
     if (TEMPCU.toInt() >= 60) selectedColor = TFT_RED;    // Rouge
 
     // Superposition d'un grand disque et d'un petit disque
@@ -969,33 +1009,39 @@ void  AfficheEcranJoursTempo() {
   uint nbJoursRougesMax = 22;
 
 
-  // Jours restants reçus de l'API Rest ENEDIS
-  uint nbJoursBleusRestants  = restantsBleus.toInt();
-  uint nbJoursBlancsRestants = restantsBlancs.toInt();
-  uint nbJoursRougesRestants = restantsRouges.toInt();
+  // Jours restants reçus de l'API Rest ENEDIS sont calculés à partir des valeurs de 
+  // nbJoursBleusConsommes / nbJoursBlancsConsommes / nbJoursRougesConsommes
 
   sprite.fillSprite(TFT_BLACK);
   sprite.fillRoundRect(0, 2, 320, 25, 0, TFT_DARKGREY);
   // Encadrement
-  sprite.drawRoundRect(0, 32, 320, 138, RECT_RADIUS, TFT_LIGHTGREY);
+  //sprite.drawRoundRect(0, 32, 320, 138, RECT_RADIUS, TFT_DARKGREY);
 
   // Titre
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_WHITE);
   sprite.drawString("JOURS TEMPO RESTANTS", 123, 15, 2);
-  sprite.drawString("Couleurs", 283, 15, 2);
+  sprite.drawString("Tarifs", 283, 15, 2);
 
   // Barres bleu/blanche/rouge pour chaque couleur des jours TEMPO (Y=34 à 134)
-  hauteurBarre = 134 * nbJoursBleusRestants / nbJoursBleusMax;
-  sprite.drawRoundRect(  2, 34, 80, 134, RECT_RADIUS, TFT_NAVY); // Cadre de la jauge (sur 2 pixels car le bleu est un peu sombre)
-  sprite.drawRoundRect(  3, 35, 78, 132, RECT_RADIUS, TFT_NAVY); 
-  sprite.fillRoundRect(  2, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_NAVY);
-  hauteurBarre = 134 * nbJoursBlancsRestants / nbJoursBlancsMax;
+  hauteurBarre = 134 * (nbJoursBleusMax-nbJoursBleusConsommes) / nbJoursBleusMax;
+  sprite.drawRoundRect(  2, 34, 80, 134, RECT_RADIUS, TFT_BLUE); // Cadre de la jauge (sur 2 pixels car le bleu est un peu sombre)
+  sprite.drawRoundRect(  3, 35, 78, 132, RECT_RADIUS, TFT_BLUE); 
+  if (hauteurBarre > 1) // Pour éviter un défaut d'affichage
+  sprite.fillRoundRect(  2, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_BLUE);
+
+  hauteurBarre = 134 * (nbJoursBlancsMax-nbJoursBlancsConsommes) / nbJoursBlancsMax;
   sprite.drawRoundRect( 84, 34, 80, 134, RECT_RADIUS, TFT_WHITE); // Cadre de la jauge
+  sprite.drawRoundRect( 85, 35, 78, 132, RECT_RADIUS, TFT_WHITE); // Cadre de la jauge
+  if (hauteurBarre > 1) // Pour éviter un défaut d'affichage
   sprite.fillRoundRect( 84, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_WHITE);
-  hauteurBarre = 134 * nbJoursRougesRestants / nbJoursRougesMax;
+
+  hauteurBarre = 134 * (nbJoursRougesMax-nbJoursRougesConsommes) / nbJoursRougesMax;
   sprite.drawRoundRect(166, 34, 80, 134, RECT_RADIUS, TFT_RED); // Cadre de la jauge
+  sprite.drawRoundRect(167, 35, 78, 132, RECT_RADIUS, TFT_RED); // Cadre de la jauge
+  if (hauteurBarre > 1) // Pour éviter un défaut d'affichage
   sprite.fillRoundRect(166, 168-hauteurBarre, 80, hauteurBarre, RECT_RADIUS, TFT_RED);
+
   // Affichage échelle max
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_DARKGREY);
@@ -1006,9 +1052,9 @@ void  AfficheEcranJoursTempo() {
   // Affichage valeurs jours
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_LIGHTGREY);
-  sprite.drawString(String(nbJoursBleusRestants)  + " j",  42, 101); 
-  sprite.drawString(String(nbJoursBlancsRestants) + " j", 124, 101); 
-  sprite.drawString(String(nbJoursRougesRestants) + " j", 206, 101); 
+  sprite.drawString(String(nbJoursBleusMax-nbJoursBleusConsommes)  + " j",  42, 101); 
+  sprite.drawString(String(nbJoursBlancsMax-nbJoursBlancsConsommes) + " j", 124, 101); 
+  sprite.drawString(String(nbJoursRougesMax-nbJoursRougesConsommes) + " j", 206, 101); 
   
   
   // Affichage couleur du jour J et jour J+1. Si indéfini => gris
@@ -1311,7 +1357,7 @@ void Affichage_Eclairage() {
   luminosite.pushToSprite(&sprite, 60, 40, TFT_BLACK);
 
   // Réglage de la luminosité
-  ledcWrite(ledChannel, dim);
+  ledcWrite(LCD_PWM_CHANNEL, dim);
 
   // Rafraichissement de l'écran
   sprite.pushSprite(0, 0);
@@ -1871,6 +1917,7 @@ void GetTimeDate() {
   // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
   time_t local_time = TIMEZONE.toLocal(now(), &tz1_Code);
 
+  // Heure du jour au format : hh:mm (avec ajout padding de 0 si besoin)
   timeNow = "";
   if (hour(local_time) < 10) timeNow += "0";
   timeNow += hour(local_time);
@@ -1878,7 +1925,7 @@ void GetTimeDate() {
   if (minute(local_time) < 10) timeNow += "0";
   timeNow += minute(local_time);
 
-  // Format : numéro du jour + mois en abrégé
+  // Date du jour au format : numéro du jour + mois en abrégé
   dateNow = "";
   dateNow += day(local_time);
   dateNow += " ";
@@ -1886,15 +1933,30 @@ void GetTimeDate() {
 
   //Serial.println("Date et heure locale : " + dateNow + " " + timeNow);
 
-  // Format : AAAA-MM-JJ
+  // Date du jour au format : AAAA-MM-JJ (avec ajout padding de 0 si besoin)
   dateNow2 = "";
   dateNow2 += year(local_time);
   dateNow2 += "-";
+  if (month(local_time) < 10) dateNow2 += "0";
   dateNow2 += month(local_time);
   dateNow2 += "-";
+  if (day(local_time) < 10) dateNow2 += "0";
   dateNow2 += day(local_time);
 
   //Serial.println("Date et heure locale 2 : " + dateNow2);
+
+  time_t local_tomorrow_time = local_time + 86400;  // +1 jour (en secondes)
+
+  // Date de demain au format : AAAA-MM-JJ (avec ajout padding de 0 si besoin)
+  dateTomorrow2 = "";
+  dateTomorrow2 += year(local_tomorrow_time);
+  dateTomorrow2 += "-";
+  if (month(local_tomorrow_time) < 10) dateTomorrow2 += "0";
+  dateTomorrow2 += month(local_tomorrow_time);
+  dateTomorrow2 += "-";
+  if (day(local_tomorrow_time) < 10) dateTomorrow2 += "0";
+  dateTomorrow2 += day(local_tomorrow_time);
+
 
   if (poisson) {if (dateNow == "1 Avril") wink = true;}
 }
@@ -1941,7 +2003,7 @@ void handleClickGauche() {
     dim = luminositeChoisie;
 
     // Réglage de la luminosité
-    ledcWrite(ledChannel, dim);
+    ledcWrite(LCD_PWM_CHANNEL, dim);
 
     delay(5000);  // affichage pendant 5 secondes
   }
@@ -1956,7 +2018,7 @@ void handleDoubleClickGauche() {
     dim = luminositeChoisie;
 
     // Réglage de la luminosité
-    ledcWrite(ledChannel, dim);
+    ledcWrite(LCD_PWM_CHANNEL, dim);
   }
 
   //Affichage_Eclairage();

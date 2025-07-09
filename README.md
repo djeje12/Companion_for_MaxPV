@@ -39,7 +39,8 @@ Forum d'échange sur Companion : https://forum-photovoltaique.fr/viewtopic.php?f
 
 Repository de `MaxPV!` :  https://github.com/Jetblack31/MaxPV
 
-
+&nbsp;
+&nbsp;
 
 # Installation
 ## Pré-requis sur la version de MaxPV!
@@ -53,59 +54,79 @@ Si vous ne faites pas la mise à jour : l'écran des index journaliers sera inut
 
 Pour compiler et téléverser le programme "Companion", l'installation de la plateforme nécessite :
 - les drivers pour la carte LilyGO S3 (ESP32 S3) à installer via le gestionnaire de cartes,
-- les bibliothèques, listées dans les paragraphes ci-dessous, à installer dans le répertoire `librairies` d'ArduinoIDE.
+- les bibliothèques, listées dans les paragraphes ci-dessous, à installer dans le répertoire `Documents\Arduino\librairies` d'ArduinoIDE.
 
 *Remarque : l'ancien manuel d'installation `Installation.pdf` est disponible à l'adresse https://github.com/JJHontebeyrie/Companion/blob/main/Installation.pdf (utiliser le bouton "Download" si le document ne s'affiche pas directement). Mais il s'agit d'une ancienne version des instructions, notamment pour les drivers de la carte. Aujourd'hui la carte LilyGO est reconnue correctement. Le lien est donné à titre d'information.*
 
 ### Drivers carte **LilyGO S3**
 A installer à partir de la bibliothèque de cartes d'ArduinoIDE.
 
-Sélectionner "**esp32** par Espressif Systems" version 2.0.14 par exemple.
+Sélectionner "**esp32** par Espressif Systems" v2.0.17 par exemple.
 L'installation peut prendre quelques minutes.
+
+Attention : ne pas prendre une v3.0.0 ou supérieure, car la compilation échouera avec un message d'erreur du style : `error: 'ledcSetup' was not declared in this scope / error: 'ledcAttachPin' was not declared in this scope;`
 
 ![alt text](images/arduinoIde_esp32_S3.png)
 
-Une fois installé, sélectionner la carte LilyGO T-Display-S3 dans le haut d'Arduino IDE.
+Une fois installé, sélectionner la carte LilyGO T-Display-S3 dans le haut d'Arduino IDE :
 
 ![alt text](images/arduinoIde_selectionner_carte.png)
 
 
 ### Librairie **TFT_eSPI**
 
-A télécharger à partir du lien : https://github.com/Bodmer/TFT_eSPI
+A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
 
-INPORTANT : sur les dernières versions (> 2.5.0), il faut paramétrer correctement le fichier `User_Setup_Select.h` pour que la librairie fonctionne avec le LilyGO S3.
+Prendre "**TFT_eSPI** par Bodmer v2.5.43"
+
+![alt text](images/arduinoIde_Lib_TFT_eSPI.png)
+
+
+**IMPORTANT** : sur les dernières versions (> 2.5.0), il faut paramétrer correctement le fichier `Documents\Arduino\librairies\TFT_eSPI\User_Setup_Select.h` pour que la librairie fonctionne avec le LilyGO S3.
 Sinon le programme compilera, mais l'écran restera noir!
 
 En effet, il faut réaliser les actions ci-dessous dans le fichier `User_Setup_Select.h` de la librairie : 
-- décommenter la ligne `#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>`
-- commenter la ligne `#include <User_Setup.h>`
+- décommenter la ligne `#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>` (situé vers ligne 133),
+- commenter la ligne `#include <User_Setup.h>` (situé vers ligne 27).
 
 ### Librairie **Time**
-A télécharger à partir du lien : https://github.com/PaulStoffregen/Time
+A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
+
+Prendre "**Time** par Michael Margolis v1.6.1"
+
+![alt text](images/arduinoIde_Lib_Time.png)
+
 
 ### Librairie **TimeZone**
-A télécharger à partir du lien : https://github.com/JChristensen/Timezone
+A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
 
-### Librairie **JSON Decoder**
-A télécharger à partir du lien : https://github.com/Bodmer/JSON_Decoder
+Prendre "**Timezone** par Jack Christensen v1.2.5"
+
+![alt text](images/arduinoIde_Lib_Timezone.png)
 
 ### Librairie **OpenWheather**
-A télécharger à partir du lien : https://github.com/Bodmer/OpenWeather
+A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
+
+Prendre "**OpenWheather** par Bodmer v0.3.0"
+
+![alt text](images/arduinoIde_Lib_OneWheather.png)
 
 ### Librairie **OneButton**
 A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
 
-Prendre "**OneButton** par Matthias Hertel v2.5.0"
+Prendre "**OneButton** par Matthias Hertel v2.6.1"
 
 ![alt text](images/arduinoIde_Lib_OneButton.png)
 
 ### Librairie **ArduinoJson**
 A installer à partir du gestionnaire de bibliothèques d'ArduinoIDE.
 
-Prendre "**ArduinoJson** par Benoit Blachon v7.0.3"
+Prendre "**ArduinoJson** par Benoit Blachon v7.4.2"
 
 ![alt text](images/arduinoIde_Lib_ArduinoJson.png)
+
+&nbsp;
+&nbsp;
 
 ## Téléchargement des sources de "**Companion**"
 Depuis cette page Github, vous pouvez télécharger les sources de 2 façons selon le cas qui vous intéresse. La première me semble la plus adaptée.
@@ -120,7 +141,7 @@ Depuis cette page Github, vous pouvez télécharger les sources de 2 façons sel
 
 	Cette action téléchargera un fichier avec le numéro de la version (par exemple : `Companion_for_MaxPV-1.0.zip`) sur votre poste, qui contient un sous-répertoire "Companion" avec les sources.
 	Cette méthode est pratique si l'on veut conserver des versions séparées dans le répertoire des croquis d'ArduinoIDE.
-
+	&nbsp;
 
 2. Depuis la page principale : télécharge la dernière version des sources.
 Cliquez sur le bouton vert `<> Code`, puis sur `Download ZIP`.
@@ -151,13 +172,16 @@ Pour information, voici les paramètres sélectionnés dans le menu `Outils` d'A
 
 ![Alt text](images/arduinoIde_outils.png)
 
-Lancer le téléversement avec le 2ème bouton ci-dessous:
+Lancer le téléversement avec le 2ème bouton ci-dessous :
 
 ![Alt text](images/arduinoIde_televerser.png)
 
 L'opération de compilation dure environ 1 min car il y a pas mal de bibliothèques à compiler...
 
-L'installation se termine avec les messages `Writing 100%` et `Hard reseting`
+L'installation se termine avec les messages `Writing 100%` et `Hard reseting`.
+
+&nbsp;
+&nbsp;
 
 # Guide d'utilisation
 
@@ -260,11 +284,19 @@ Une adresse locale permet également d'accéder à une interface Web : http://co
 
 ![Alt text](images/ecran_web.png)
 
+Le bouton orange permet d'afficher les données de la journée.
+
+&nbsp;
+&nbsp;
+
 # Crédits
 
 L'afficheur est basé sur les travaux de `Companion MSunPV 2.50` de @jjhontebeyrie (https://github.com/JJHontebeyrie/Companion).
 
-Le code a été adpaté aux spécificités de MaxPV!
+Le code a été adapaté aux spécificités de MaxPV!
+
+&nbsp;
+&nbsp;
 
 # Matériel LiLyGO T-Display-S3
 Testé avec cette carte ESP32-S3 en USB-C et avec le boitier plastique (Shell Black) : https://fr.aliexpress.com/item/1005004496543314.html?spm=a2g0o.order_list.order_list_main.82.65435e5bYQbfne&gatewayAdapt=glo2fra
@@ -276,8 +308,17 @@ Mais d'autres cartes de votre choix avec les mêmes spécifications seront égal
 En avril 2023, le tout était vendu à 22€.
 ![Alt text](images/lilygo.png)
 
+&nbsp;
+&nbsp;
+
 # Versions
 
+## Version 1.3 (08/07/2025)
+- Correction problème affichage des jours TEMPO : utilisation de la nouvelle API,
+- Ajout couleur jaune sur indicateur température ECS,
+- Suppression de la dépendance avec librairie JSON_Decoder pour utiliser seulement la librairie ArduinoJson,
+- Mise à jour README d'installation.
+  
 ## Version 1.2 (28/02/2024)
 - Ajout écran affichage des jours EDF TEMPO (activation paramétrable),
 - Amélioration de la gestion de la batterie,
