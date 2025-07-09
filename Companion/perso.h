@@ -93,7 +93,7 @@ bool cumulEnWh = true; // Pour les cumuls journalier. Mettre "true" pour affiche
 //   Valeurs possibles : 0, 50, 100, 150, 200, 250
 int luminositeChoisie = 100;
 
-// Batterie d'alimentation : si l'alimentation se fait par batterie, mettre "true". Sinon mettre "false".
+// Batterie d'alimentation : si l'alimentation se fait par batterie, mettre "true" pour afficher l'indicateur de batterie. Sinon mettre "false".
 bool lipo = false;
 // Calibration de la batterie : pour vous aider à trouver les bonnes valeurs vous pouvez décommenter la ligne "AfficheDebugTFT[...]" dans la fonction "AffichageIndicateurBatterie()" (ligne 1361). Cela vous permettra de visualiser la tension de la batterie
 #define BAT_VAL_MAX 4000 // Tension de la batterie en charge max (en mV)
