@@ -1,7 +1,7 @@
 //***********************************************************************************************************
 // COMPANION pour MaxPV!                                                                                   **/
 //
-String Version = "1.3";
+String Version = "1.4";
 //                                                                                                         **
 /************************************************************************************************************
 ** Affichage déporté de consommation solaire pour MaxPV! basé sur Campanion MSunPV 2.50 de @jjhontebeyrie  **
@@ -309,7 +309,7 @@ void setup() {
   // Récupération de l'heure
   udp.begin(localPort);
   syncTime();
-  esp_task_wdt_reset();
+  //esp_task_wdt_reset(); // Désactivé pour qu'il redémarre si récup des infos MaxPv ne marche plus
 
   // Affichage texte sur écran de départ
   depart.setTextColor(TFT_LIGHTGREY);
@@ -383,7 +383,7 @@ void loop() {
 
   // Données EDF tarifs des jours TEMPO
   if (affichageEcranTempo)
-    if (doItImmediately || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO_SECS  * 1000UL < millis())) {
+    if (doItImmediately || (lastUpdateTempo + UPDATE_INTERVALLE_TEMPO_SECS  * 1000UL < millis())) { // 1h convertis en ms
       RecuperationDonneesJoursTempo();
       lastUpdateTempo = millis();
     }
@@ -422,7 +422,7 @@ void loop() {
   serveurweb();
 
   doItImmediately = false;
-  esp_task_wdt_reset();
+  //esp_task_wdt_reset(); // Désactivé pour qu'il redémarre si récup des infos MaxPv ne marche plus
 }
 
 
@@ -519,18 +519,19 @@ void RecuperationDonneesJoursTempo() {
       }
     }
 
+    // Résultats :
+    colorTempoJJ  = Couleur_Jour_Tempo (JourJJ);
+    colorTempoJJ1 = Couleur_Jour_Tempo (JourJJ1);
+    Serial.println("[HTTP TEMPO] Jours Consommés => Bleu : " + String(nbJoursBleusConsommes) + " / Blancs : " + String(nbJoursBlancsConsommes) + " / Rouges : " + String(nbJoursRougesConsommes) );
+
+    esp_task_wdt_reset();
+
   } else {
     Serial.printf("[HTTP TEMPO] Erreur HTTP : %d\n", httpCode);
   }
 
   http.end();
 
-  // Résultats :
-  colorTempoJJ  = Couleur_Jour_Tempo (JourJJ);
-  colorTempoJJ1 = Couleur_Jour_Tempo (JourJJ1);
-  Serial.println("[HTTP TEMPO] Jours Consommés => Bleu : " + String(nbJoursBleusConsommes) + " / Blancs : " + String(nbJoursBlancsConsommes) + " / Rouges : " + String(nbJoursRougesConsommes) );
-
-  esp_task_wdt_reset();
 }
 
 /* Détermine la couleur du jour TEMPO en fonction de la valeur du codeJour retourné */
@@ -739,11 +740,11 @@ suite:
   // Si exportation d'énergie, alors même bouton avec icone énergie
   int reserveEnergie = CU.toInt() - CO.toInt(); // En W
   //bool topInjection = (CO.toInt() < 0) ? true : false;
-  if      (reserveEnergie <=    0)                                            selectedButton = (uint16_t *) Button_Icon_Red;
-  else if (reserveEnergie >     0 and reserveEnergie <  200)                  selectedButton = (uint16_t *) Button_Icon_Orange;
-  else if (reserveEnergie >=  200 and reserveEnergie < 1000)                  selectedButton = (uint16_t *) Button_Icon_Yellow;
-  else if (reserveEnergie >= 1000 and reserveEnergie < 2000)                  selectedButton = (uint16_t *) Button_Icon_Green;
-  else                                                                        selectedButton = (uint16_t *) Button_Icon_Turquoise;
+  if      (reserveEnergie <=    0)                           selectedButton = (uint16_t *) Button_Icon_Red;
+  else if (reserveEnergie >     0 and reserveEnergie <  200) selectedButton = (uint16_t *) Button_Icon_Orange;
+  else if (reserveEnergie >=  200 and reserveEnergie < 1000) selectedButton = (uint16_t *) Button_Icon_Yellow;
+  else if (reserveEnergie >= 1000 and reserveEnergie < 2000) selectedButton = (uint16_t *) Button_Icon_Green;
+  else                                                       selectedButton = (uint16_t *) Button_Icon_Turquoise;
 
   // Dessin du voyant
   voyant.pushImage(0, 0, 64, 64, selectedButton);
@@ -770,7 +771,7 @@ suite:
   sprite.pushSprite(0, 0);
 
   // Remise à zéro du watchdog
-  esp_task_wdt_reset();
+  //esp_task_wdt_reset(); // Désactivé pour qu'il redémarre si récup des infos MaxPv ne marche plus
 }
 
 
@@ -1020,7 +1021,7 @@ void  AfficheEcranJoursTempo() {
   // Titre
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_WHITE);
-  sprite.drawString("JOURS TEMPO RESTANTS", 123, 15, 2);
+  sprite.drawString(String(nbJoursBleusMax-nbJoursBleusConsommes+nbJoursBlancsMax-nbJoursBlancsConsommes+nbJoursRougesMax-nbJoursRougesConsommes) + " JOURS TEMPO RESTANTS", 123, 15, 2);
   sprite.drawString("Tarifs", 283, 15, 2);
 
   // Barres bleu/blanche/rouge pour chaque couleur des jours TEMPO (Y=34 à 134)
@@ -1045,14 +1046,14 @@ void  AfficheEcranJoursTempo() {
   // Affichage échelle max
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_DARKGREY);
-  sprite.drawString(String(nbJoursBleusMax)  + " j",  42, 43, 2); 
-  sprite.drawString(String(nbJoursBlancsMax) + " j", 124, 43, 2); 
-  sprite.drawString(String(nbJoursRougesMax) + " j", 206, 43, 2); 
+  sprite.drawString(String(nbJoursBleusMax)  + " j",  42, 46, 2); 
+  sprite.drawString(String(nbJoursBlancsMax) + " j", 124, 46, 2); 
+  sprite.drawString(String(nbJoursRougesMax) + " j", 206, 46, 2); 
 
   // Affichage valeurs jours
   sprite.setTextDatum(MC_DATUM);
   sprite.setTextColor(TFT_LIGHTGREY);
-  sprite.drawString(String(nbJoursBleusMax-nbJoursBleusConsommes)  + " j",  42, 101); 
+  sprite.drawString(String(nbJoursBleusMax-nbJoursBleusConsommes)   + " j",  42, 101); 
   sprite.drawString(String(nbJoursBlancsMax-nbJoursBlancsConsommes) + " j", 124, 101); 
   sprite.drawString(String(nbJoursRougesMax-nbJoursRougesConsommes) + " j", 206, 101); 
   
@@ -1085,6 +1086,10 @@ void FormatageDonnesMaxPV() {
   // dataTemperature : chaine contenant une seule valeur de température (à améliorer pour gérer plusieurs valeurs). Utilisé uniquement dans le cas où l'on utilise un serveur de température hors MaxPV
   if (sondeTemperatureECS && !sondeTemperatureECSMaxPV) Serial.println("Donnée température reçue : " + dataTemperature);
 
+  // Réinitialisation des données principales du tableau, pour le cas d'erreur où dataMaxPv est vide... (fiabilisation)
+  MsgDataSplit[2] = "";   // Consommation réseau instantanée (W) - pactive
+  MsgDataSplit[12] = "";  // Production solaire instantanée PV - pimpulsion
+  MsgDataSplit[4] = "";   // Routage vers la charge - prouted
   // Mise en variables des données MaxPV!, MsgDataSplit[0 à MAXPV_DATA_API_SIZE-1]
   split(MsgDataSplit, MAXPV_DATA_API_SIZE, dataMaxPV, ',');
   // DEBUG - Affichage des données de l'API MaxPV! dans le Moniteur Série
@@ -1179,7 +1184,7 @@ void FormatageDonnesMaxPV() {
     Serial.println(" - Puissance ECS : " + String(puissanceECS));*/
   }
 
-  esp_task_wdt_reset();
+  //esp_task_wdt_reset();
 }
 
 
@@ -1249,10 +1254,10 @@ void Indicateurs_Graphiques() {
   if (nbbarres > 9) nbbarres = 9;
 
   // Couleurs variant de rouge (faible routage) à vert (fort routage) en fonction de la puissance routée
-  if      (nbbarres > 5) selectedColor = TFT_GREEN;  // 6, 7 et 8 barres (Vert)
+  if      (nbbarres > 5) selectedColor = TFT_GREEN;   // 6, 7 et 8 barres (Vert)
   else if (nbbarres > 3) selectedColor = TFT_YELLOW;  // 4 et 5 barres (Jaune)
   else if (nbbarres > 1) selectedColor = TFT_ORANGE;  // 2 et 3 barres (Orange)
-  else if (nbbarres > 0) selectedColor = TFT_RED;  // 1 barre (Rouge)
+  else if (nbbarres > 0) selectedColor = TFT_RED;     // 1 barre (Rouge)
 
   for (i = 0; i < nbbarres; i++) sprite.fillRect(200, (102 - (i * 5)), 20, 4, selectedColor);
 
@@ -1283,10 +1288,10 @@ void Indicateurs_Graphiques() {
     if (nbbarres > 9) nbbarres = 9;
 
     // Couleurs variant de vert (faible consommation) à rouge (forte consommation) en fonction de la puissance consommée
-    if      (nbbarres > 6) selectedColor = TFT_RED;  // 3500W et plus - 7, 8 et 9 barres
+    if      (nbbarres > 6) selectedColor = TFT_RED;     // 3500W et plus - 7, 8 et 9 barres
     else if (nbbarres > 4) selectedColor = TFT_ORANGE;  // 2500W à 3499W - 5 et 6 barres
     else if (nbbarres > 2) selectedColor = TFT_YELLOW;  // 1500W à 2499W - 3 et 4 barres
-    else if (nbbarres > 0) selectedColor = TFT_GREEN;  //  500W à 1499W - 1 et 2 barres
+    else if (nbbarres > 0) selectedColor = TFT_GREEN;   //  500W à 1499W - 1 et 2 barres
 
     for (i = 0; i < nbbarres; i++) sprite.fillRect(200, (160 - (i * 5)), 20, 4, selectedColor);
 
@@ -1551,7 +1556,7 @@ void RecuperationDonneesMeteo() {
 void RecuperationDonneesMaxPV() {
 
   if (!premiereLectureDonneesMaxPV) { // Pour éviter d'afficher un écran noir après le premier démarrage
-    // Affichage indicateur de rafraichissement des données : démarrage
+    // Affichage indicateur de rafraichissement des données : démarrage (cercle vert)
     sprite.drawSmoothCircle(8, 8, 4, TFT_GREENYELLOW, TFT_TRANSPARENT); 
     sprite.pushSprite(0, 0);
     }
@@ -1568,6 +1573,12 @@ void RecuperationDonneesMaxPV() {
 
   if (!client.connect(serveurMaxPV, portServeurMaxPV)) {
     Serial.println("E1 : Connexion échouée!");
+    client.stop();
+
+    // Affichage message d'erreur
+    AfficheDebugTFT("Erreur connexion aux metriques MaxPV!");
+    delay(3000);
+
     return;
   }
 
@@ -1599,9 +1610,17 @@ void RecuperationDonneesMaxPV() {
   }
   dataMaxPV = dataString;  // Sauvegarde des données reçues de MaxPV!
 
-  Serial.println("E1 : Requête traitée avec succès!");
+  if (dataMaxPV.length() > 0) {
+    Serial.println("E1 : Requête traitée avec succès!");
+    esp_task_wdt_reset();
+  } else {
+    Serial.println("E1 : Requête contient des données vides!");
+
+    // Affichage message d'erreur
+    AfficheDebugTFT("Erreur reception des metriques MaxPV!");
+    delay(3000);
+  }
   client.stop();
-  esp_task_wdt_reset();
 
 
   /*****************************************************
@@ -1615,6 +1634,12 @@ void RecuperationDonneesMaxPV() {
 
     if (!client.connect(serveurMaxPV, portServeurMaxPV)) {
       Serial.println("E2 : Connexion échouée!");
+      client.stop();
+
+      // Affichage message d'erreur
+      AfficheDebugTFT("Erreur connexion aux parametres MaxPV!");
+      delay(3000);
+
       return;
     }
 
@@ -1639,7 +1664,7 @@ void RecuperationDonneesMaxPV() {
 
     Serial.println("E2 : Requête traitée avec succès!");
     client.stop();
-    esp_task_wdt_reset();
+    //esp_task_wdt_reset(); // Le reset n'est fait que si les données essentielles de MaxPv sont lues
   }
 
 
@@ -1656,6 +1681,12 @@ void RecuperationDonneesMaxPV() {
 
     if (!client.connect(serveurTemperatureECS, portServeurTemperatureECS)) {
       Serial.println("E3 : Connexion échouée!");
+      client.stop();
+
+      // Affichage message d'erreur
+      AfficheDebugTFT("Erreur connexion au serveur de temperature!");
+      delay(3000);
+
       return;
     }
 
@@ -1680,11 +1711,11 @@ void RecuperationDonneesMaxPV() {
 
     Serial.println("E3 : Requête traitée avec succès!");
     client.stop();
-    esp_task_wdt_reset();
+    //esp_task_wdt_reset();  // Le reset n'est fait que si les données essentielles de MaxPv sont lues
   }
 
   if (!premiereLectureDonneesMaxPV) {
-    // Indicateur de rafraichissement des données => statut terminé (il sera effacé lors du rafraichissement de l'écran)
+    // Indicateur de rafraichissement des données => statut terminé (il sera effacé lors du rafraichissement de l'écran) (cercle vert rempli)
     sprite.fillSmoothCircle(8, 8, 4, TFT_GREENYELLOW);
     sprite.pushSprite(0, 0);
   }
@@ -1855,6 +1886,7 @@ void serveurweb() {
     clientweb.stop();
     Serial.println("Client déconnecté.");
     Serial.println("");
+
     esp_task_wdt_reset();
   }
 }

@@ -313,6 +313,9 @@ En avril 2023, le tout était vendu à 22€.
 
 # Versions
 
+## Version 1.4 (29/12/2025)
+- Correction problème de perte de lecture des données MaxPV ou de l'heure (rédémarrage automatique si besoin).
+  
 ## Version 1.3 (08/07/2025)
 - Correction problème affichage des jours TEMPO : utilisation de la nouvelle API,
 - Ajout couleur jaune sur indicateur température ECS,
